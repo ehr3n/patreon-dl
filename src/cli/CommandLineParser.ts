@@ -30,8 +30,10 @@ const COMMAND_LINE_ARGS = {
   inventory: 'inventory',
   inventoryOut: 'inventory-out',
   inventoryLimit: 'inventory-limit',
+  inventoryReport: 'inventory-report',
   inventorySelect: 'inventory-select',
   inventoryIn: 'inventory-in',
+  targetIn: 'target-in',
   targetOut: 'target-out',
   selectMedia: 'select-media',
   selectTag: 'select-tag',
@@ -147,6 +149,11 @@ const OPT_DEFS = [
     typeLabel: '<number>'
   },
   {
+    name: COMMAND_LINE_ARGS.inventoryReport,
+    description: 'Read inventory JSONL and print a local summary report.',
+    type: Boolean
+  },
+  {
     name: COMMAND_LINE_ARGS.inventorySelect,
     description: 'Read inventory JSONL and write a downloader targets file.',
     type: Boolean
@@ -154,6 +161,12 @@ const OPT_DEFS = [
   {
     name: COMMAND_LINE_ARGS.inventoryIn,
     description: 'Path to read inventory JSONL. Defaults to <out.dir>/.patreon-dl/inventory.jsonl.',
+    type: String,
+    typeLabel: '<file>'
+  },
+  {
+    name: COMMAND_LINE_ARGS.targetIn,
+    description: 'Path to read selected target URLs for inventory report.',
     type: String,
     typeLabel: '<file>'
   },
@@ -218,6 +231,7 @@ export default class CommandLineParser {
         COMMAND_LINE_ARGS.noPrompt,
         COMMAND_LINE_ARGS.dryRun,
         COMMAND_LINE_ARGS.inventory,
+        COMMAND_LINE_ARGS.inventoryReport,
         COMMAND_LINE_ARGS.inventorySelect,
         COMMAND_LINE_ARGS.debugAPI
       ];
@@ -441,6 +455,17 @@ export default class CommandLineParser {
     return this.#getNumberOption(COMMAND_LINE_ARGS.inventoryLimit);
   }
 
+  static inventoryReport() {
+    let opts: commandLineArgs.CommandLineOptions;
+    try {
+      opts = this.#parseArgs();
+    }
+    catch (_error: unknown) {
+      return false;
+    }
+    return !!opts[COMMAND_LINE_ARGS.inventoryReport];
+  }
+
   static inventorySelect() {
     let opts: commandLineArgs.CommandLineOptions;
     try {
@@ -454,6 +479,10 @@ export default class CommandLineParser {
 
   static inventoryIn() {
     return this.#getStringOption(COMMAND_LINE_ARGS.inventoryIn);
+  }
+
+  static targetIn() {
+    return this.#getStringOption(COMMAND_LINE_ARGS.targetIn);
   }
 
   static targetOut() {

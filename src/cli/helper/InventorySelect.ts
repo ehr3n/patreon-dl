@@ -9,20 +9,20 @@ export type InventorySelectResult = false | {
   hasError: boolean;
 };
 
-type ContentMediaType = 'image' | 'video' | 'audio' | 'attachment';
+export type ContentMediaType = 'image' | 'video' | 'audio' | 'attachment';
 
-type InventoryTag = {
+export type InventoryTag = {
   id?: string | null;
   value?: string | null;
 };
 
-type InventoryMedia = {
+export type InventoryMedia = {
   source?: string | null;
   type?: string | null;
   hasDownloadURL?: boolean;
 };
 
-type InventoryPostRecord = {
+export type InventoryPostRecord = {
   type?: string;
   id?: string | null;
   url?: string | null;
@@ -32,7 +32,7 @@ type InventoryPostRecord = {
   media?: InventoryMedia[];
 };
 
-const CONTENT_MEDIA_TYPES: ContentMediaType[] = [ 'image', 'video', 'audio', 'attachment' ];
+export const CONTENT_MEDIA_TYPES: ContentMediaType[] = [ 'image', 'video', 'audio', 'attachment' ];
 const DEFAULT_INVENTORY_FILENAME = 'inventory.jsonl';
 const DEFAULT_TARGETS_FILENAME = 'targets.txt';
 
@@ -103,7 +103,7 @@ export async function selectInventoryTargets(options: {
   return { hasError: false };
 }
 
-function readInventoryPosts(file: string) {
+export function readInventoryPosts(file: string) {
   const content = fs.readFileSync(file, 'utf-8');
   const posts: InventoryPostRecord[] = [];
   const lines = content.replace(/\r\n/g, '\n').split('\n');
@@ -204,7 +204,7 @@ function matchesMediaTypes(post: InventoryPostRecord, mediaTypes: ContentMediaTy
   });
 }
 
-function getContentMediaType(media: InventoryMedia): ContentMediaType | null {
+export function getContentMediaType(media: InventoryMedia): ContentMediaType | null {
   switch (media.source) {
     case 'audio':
       return 'audio';
