@@ -38,6 +38,7 @@ export interface PostsFetcherResult {
 }
 
 const SLEEPER_INTERVAL = 900000; // 15 mins
+export const SILENT_ABORT_REASON = 'silent';
 
 export default class PostsFetcher extends EventEmitter {
 
@@ -237,7 +238,9 @@ export default class PostsFetcher extends EventEmitter {
       return;
     }
     if (this.signal?.aborted) {
-      this.log('warn', 'Abort');
+      if (this.signal.reason !== SILENT_ABORT_REASON) {
+        this.log('warn', 'Abort');
+      }
       this.#setStatus({ status: 'aborted' });
       return;
     }

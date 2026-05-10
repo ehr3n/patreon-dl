@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { once } from 'events';
 import Downloader from '../../downloaders/Downloader.js';
-import PostsFetcher from '../../downloaders/PostsFetcher.js';
+import PostsFetcher, { SILENT_ABORT_REASON } from '../../downloaders/PostsFetcher.js';
 import ConsoleLogger from '../../utils/logging/ConsoleLogger.js';
 import { commonLog } from '../../utils/logging/Logger.js';
 import { getCLIOptions } from '../CLIOptions.js';
@@ -30,11 +30,13 @@ export async function inventoryPosts(options: {
   onOptionError: (error: unknown) => Promise<void>;
 }): Promise<InventoryPostsResult> {
   let inventoryOut: string | undefined;
+  let inventoryLimit: number | undefined;
   try {
     if (!CommandLineParser.inventory()) {
       return false;
     }
     inventoryOut = CommandLineParser.inventoryOut();
+    inventoryLimit = parseInventoryLimit(CommandLineParser.inventoryLimit());
   }
   catch (error) {
     await options.onOptionError(error);
@@ -63,6 +65,7 @@ export async function inventoryPosts(options: {
   let output: fs.WriteStream | null = null;
   let outputPath: string | null = null;
   let totalPosts = 0;
+  let hitLimit = false;
   const startedAt = new Date().toISOString();
 
   try {
@@ -87,6 +90,7 @@ export async function inventoryPosts(options: {
           type: 'inventoryRun',
           schemaVersion: 1,
           startedAt,
+          limit: inventoryLimit || null,
           targets: cliOptions.targetURLs.map((t) => t.url)
         });
       }
@@ -116,17 +120,30 @@ export async function inventoryPosts(options: {
         }
         pageCount++;
         for (const post of list.items) {
+          if (inventoryLimit && totalPosts >= inventoryLimit) {
+            hitLimit = true;
+            break;
+          }
           await writeJSONL(output, createPostInventoryRecord(post, target.url));
           targetPostCount++;
           totalPosts++;
         }
         commonLog(consoleLogger, 'info', null, `Inventoried posts: ${targetPostCount} / ${list.total ?? '?'}`);
+        if (inventoryLimit && totalPosts >= inventoryLimit) {
+          hitLimit = true;
+          commonLog(consoleLogger, 'info', null, `Inventory limit reached: ${totalPosts} posts`);
+          abortController.abort(SILENT_ABORT_REASON);
+          break;
+        }
         if (postsFetcher.hasNext() && config.request.pageDelay > 0) {
           commonLog(consoleLogger, 'info', null, `Waiting ${config.request.pageDelay / 1000} seconds before next inventory page`);
           await Sleeper.getInstance(config.request.pageDelay, abortController.signal).start();
         }
       }
       commonLog(consoleLogger, 'info', null, `Inventory target complete: ${targetPostCount} posts across ${pageCount} pages`);
+      if (hitLimit) {
+        break;
+      }
     }
   }
   catch (error) {
@@ -143,7 +160,9 @@ export async function inventoryPosts(options: {
         schemaVersion: 1,
         startedAt,
         completedAt: new Date().toISOString(),
-        aborted: abortController.signal.aborted,
+        aborted: abortController.signal.aborted && !hitLimit,
+        limited: hitLimit,
+        limit: inventoryLimit || null,
         totalPosts
       });
       await new Promise<void>((resolve) => inventoryOutput.end(resolve));
@@ -155,6 +174,16 @@ export async function inventoryPosts(options: {
   }
 
   return { hasError };
+}
+
+function parseInventoryLimit(value?: number) {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (!Number.isInteger(value) || value <= 0) {
+    throw Error("'--inventory-limit' must be a positive integer");
+  }
+  return value;
 }
 
 function openInventoryOutput(file: string) {

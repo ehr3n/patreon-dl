@@ -29,6 +29,7 @@ const COMMAND_LINE_ARGS = {
   listPostsByUserId: 'list-posts-uid',
   inventory: 'inventory',
   inventoryOut: 'inventory-out',
+  inventoryLimit: 'inventory-limit',
   inventorySelect: 'inventory-select',
   inventoryIn: 'inventory-in',
   targetOut: 'target-out',
@@ -138,6 +139,12 @@ const OPT_DEFS = [
     description: 'Path to write inventory JSONL. Defaults to <out.dir>/.patreon-dl/inventory.jsonl.',
     type: String,
     typeLabel: '<file>'
+  },
+  {
+    name: COMMAND_LINE_ARGS.inventoryLimit,
+    description: 'Maximum number of post records to write during inventory.',
+    type: Number,
+    typeLabel: '<number>'
   },
   {
     name: COMMAND_LINE_ARGS.inventorySelect,
@@ -429,6 +436,10 @@ export default class CommandLineParser {
     return this.#getStringOption(COMMAND_LINE_ARGS.inventoryOut);
   }
 
+  static inventoryLimit() {
+    return this.#getNumberOption(COMMAND_LINE_ARGS.inventoryLimit);
+  }
+
   static inventorySelect() {
     let opts: commandLineArgs.CommandLineOptions;
     try {
@@ -457,6 +468,10 @@ export default class CommandLineParser {
   }
 
   static selectLimit() {
+    return this.#getNumberOption(COMMAND_LINE_ARGS.selectLimit);
+  }
+
+  static #getNumberOption(key: typeof COMMAND_LINE_ARGS[keyof typeof COMMAND_LINE_ARGS]) {
     let opts: commandLineArgs.CommandLineOptions;
     try {
       opts = this.#parseArgs();
@@ -464,9 +479,9 @@ export default class CommandLineParser {
     catch (_error: unknown) {
       return undefined;
     }
-    const value = opts[COMMAND_LINE_ARGS.selectLimit];
+    const value = opts[key];
     if (value === null) {
-      throw Error(`'--${COMMAND_LINE_ARGS.selectLimit}' missing value`);
+      throw Error(`'--${key}' missing value`);
     }
     if (typeof value === 'number') {
       return value;
