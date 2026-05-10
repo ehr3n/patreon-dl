@@ -124,7 +124,23 @@ $ patreon-dl [OPTION]... URL
 | <code><nobr>--list-posts-uid &lt;user ID&gt;</nobr></code> | | Same as `--list-posts`, but takes user ID instead of vanity. |
 | `--inventory` | | Fetch post metadata as JSONL without downloading media. |
 | <code><nobr>--inventory-out &lt;file&gt;</nobr></code> | | Path to write inventory JSONL. Defaults to `<out.dir>/.patreon-dl/inventory.jsonl`. |
+| `--inventory-select` | | Read inventory JSONL and write a downloader targets file. |
+| <code><nobr>--inventory-in &lt;file&gt;</nobr></code> | | Path to read inventory JSONL. Defaults to `<out.dir>/.patreon-dl/inventory.jsonl`. |
+| <code><nobr>--target-out &lt;file&gt;</nobr></code> | | Path to write selected target URLs. Defaults to `<out.dir>/.patreon-dl/targets.txt`. |
+| <code><nobr>--select-media &lt;types&gt;</nobr></code> | | Select posts with content media types, e.g. `audio` or `audio,attachment`. |
+| <code><nobr>--select-tag &lt;tags&gt;</nobr></code> | | Select posts with one or more tag values or IDs. |
+| <code><nobr>--select-limit &lt;number&gt;</nobr></code> | | Limit selected posts, useful for pilot runs. |
 | `--configure-youtube` | | <p>Configure YouTube connection.</p>`patreon-dl` supports downloading embedded YouTube videos. If you have a YouTube Premium account, you can connect `patreon-dl` to it for downloading Premium-quality streams. You will also need to connect to an account if you get a "Login required" error message during download.|
+
+### Inventory workflow
+
+Use inventory mode to catalog posts without downloading media, then select post URLs from that catalog for a normal download run:
+
+```
+$ patreon-dl -C creator.local.conf --inventory
+$ patreon-dl -C creator.local.conf --inventory-select --select-media audio --target-out ./downloads/creator/.patreon-dl/audio-targets.txt
+$ patreon-dl -C creator.local.conf ./downloads/creator/.patreon-dl/audio-targets.txt
+```
 
 ### URL
 

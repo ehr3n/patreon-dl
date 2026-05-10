@@ -29,6 +29,12 @@ const COMMAND_LINE_ARGS = {
   listPostsByUserId: 'list-posts-uid',
   inventory: 'inventory',
   inventoryOut: 'inventory-out',
+  inventorySelect: 'inventory-select',
+  inventoryIn: 'inventory-in',
+  targetOut: 'target-out',
+  selectMedia: 'select-media',
+  selectTag: 'select-tag',
+  selectLimit: 'select-limit',
   debugAPI: 'debug-api'
 } as const;
 
@@ -134,6 +140,41 @@ const OPT_DEFS = [
     typeLabel: '<file>'
   },
   {
+    name: COMMAND_LINE_ARGS.inventorySelect,
+    description: 'Read inventory JSONL and write a downloader targets file.',
+    type: Boolean
+  },
+  {
+    name: COMMAND_LINE_ARGS.inventoryIn,
+    description: 'Path to read inventory JSONL. Defaults to <out.dir>/.patreon-dl/inventory.jsonl.',
+    type: String,
+    typeLabel: '<file>'
+  },
+  {
+    name: COMMAND_LINE_ARGS.targetOut,
+    description: 'Path to write selected target URLs. Defaults to <out.dir>/.patreon-dl/targets.txt.',
+    type: String,
+    typeLabel: '<file>'
+  },
+  {
+    name: COMMAND_LINE_ARGS.selectMedia,
+    description: 'Select posts with one or more content media types: image, video, audio, attachment.',
+    type: String,
+    typeLabel: '<types>'
+  },
+  {
+    name: COMMAND_LINE_ARGS.selectTag,
+    description: 'Select posts with one or more tag values or IDs. Separate multiple tags with commas.',
+    type: String,
+    typeLabel: '<tags>'
+  },
+  {
+    name: COMMAND_LINE_ARGS.selectLimit,
+    description: 'Maximum number of selected posts to write.',
+    type: Number,
+    typeLabel: '<number>'
+  },
+  {
     name: COMMAND_LINE_ARGS.configureYouTube,
     description: 'Configure YouTube connection',
     type: Boolean
@@ -170,6 +211,7 @@ export default class CommandLineParser {
         COMMAND_LINE_ARGS.noPrompt,
         COMMAND_LINE_ARGS.dryRun,
         COMMAND_LINE_ARGS.inventory,
+        COMMAND_LINE_ARGS.inventorySelect,
         COMMAND_LINE_ARGS.debugAPI
       ];
       if (booleanTypeArgs.includes(key as any) && value !== undefined) {
@@ -384,6 +426,37 @@ export default class CommandLineParser {
   }
 
   static inventoryOut() {
+    return this.#getStringOption(COMMAND_LINE_ARGS.inventoryOut);
+  }
+
+  static inventorySelect() {
+    let opts: commandLineArgs.CommandLineOptions;
+    try {
+      opts = this.#parseArgs();
+    }
+    catch (_error: unknown) {
+      return false;
+    }
+    return !!opts[COMMAND_LINE_ARGS.inventorySelect];
+  }
+
+  static inventoryIn() {
+    return this.#getStringOption(COMMAND_LINE_ARGS.inventoryIn);
+  }
+
+  static targetOut() {
+    return this.#getStringOption(COMMAND_LINE_ARGS.targetOut);
+  }
+
+  static selectMedia() {
+    return this.#getStringOption(COMMAND_LINE_ARGS.selectMedia);
+  }
+
+  static selectTag() {
+    return this.#getStringOption(COMMAND_LINE_ARGS.selectTag);
+  }
+
+  static selectLimit() {
     let opts: commandLineArgs.CommandLineOptions;
     try {
       opts = this.#parseArgs();
@@ -391,9 +464,27 @@ export default class CommandLineParser {
     catch (_error: unknown) {
       return undefined;
     }
-    const value = opts[COMMAND_LINE_ARGS.inventoryOut];
+    const value = opts[COMMAND_LINE_ARGS.selectLimit];
     if (value === null) {
-      throw Error(`'--${COMMAND_LINE_ARGS.inventoryOut}' missing value`);
+      throw Error(`'--${COMMAND_LINE_ARGS.selectLimit}' missing value`);
+    }
+    if (typeof value === 'number') {
+      return value;
+    }
+    return undefined;
+  }
+
+  static #getStringOption(key: typeof COMMAND_LINE_ARGS[keyof typeof COMMAND_LINE_ARGS]) {
+    let opts: commandLineArgs.CommandLineOptions;
+    try {
+      opts = this.#parseArgs();
+    }
+    catch (_error: unknown) {
+      return undefined;
+    }
+    const value = opts[key];
+    if (value === null) {
+      throw Error(`'--${key}' missing value`);
     }
     if (typeof value === 'string' && value.trim()) {
       return value.trim();
