@@ -23,6 +23,7 @@ const COMMAND_LINE_ARGS = {
   logLevel: 'log-level',
   noPrompt: 'no-prompt',
   dryRun: 'dry-run',
+  force: 'force',
   listTiers: 'list-tiers',
   listTiersByUserId: 'list-tiers-uid',
   listPosts: 'list-posts',
@@ -105,6 +106,11 @@ const OPT_DEFS = [
   {
     name: COMMAND_LINE_ARGS.dryRun,
     description: 'Run without writing files to disk (except logs, if any). For testing / debugging.',
+    type: Boolean
+  },
+  {
+    name: COMMAND_LINE_ARGS.force,
+    description: 'Force target reprocessing by bypassing status-cache skips. Existing files still follow file-exists settings.',
     type: Boolean
   },
   {
@@ -230,6 +236,7 @@ export default class CommandLineParser {
       const booleanTypeArgs = [
         COMMAND_LINE_ARGS.noPrompt,
         COMMAND_LINE_ARGS.dryRun,
+        COMMAND_LINE_ARGS.force,
         COMMAND_LINE_ARGS.inventory,
         COMMAND_LINE_ARGS.inventoryReport,
         COMMAND_LINE_ARGS.inventorySelect,
@@ -269,7 +276,7 @@ export default class CommandLineParser {
       targetURLs: __getValue(COMMAND_LINE_ARGS.targetURL),
       debugAPI: __getValue(COMMAND_LINE_ARGS.debugAPI),
       cookie: __getValue(COMMAND_LINE_ARGS.cookie),
-      useStatusCache: undefined,
+      useStatusCache: __getForceUseStatusCacheValue(__getValue(COMMAND_LINE_ARGS.force)),
       pathToFFmpeg: __getValue(COMMAND_LINE_ARGS.ffmpeg),
       pathToDeno: __getValue(COMMAND_LINE_ARGS.deno),
       outDir: __getValue(COMMAND_LINE_ARGS.outDir),
@@ -319,6 +326,17 @@ export default class CommandLineParser {
         color: undefined
       }
     };
+
+    function __getForceUseStatusCacheValue(force?: CLIOptionParserEntry) {
+      if (!force) {
+        return undefined;
+      }
+      return {
+        ...force,
+        key: '--force',
+        value: '0'
+      };
+    }
   }
 
   static showUsage() {

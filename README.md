@@ -118,6 +118,7 @@ $ patreon-dl [OPTION]... URL
 | `--log-level <level>` | `-l` | Log level of the console logger: `info`, `debug`, `warn` or `error`; set to `none` to disable the logger. |
 | `--no-prompt` | `-y` | Do not prompt for confirmation to proceed |
 | `--dry-run`   |      | Run without writing files to disk (except logs, if any). Intended for testing / debugging. |
+| `--force`     |      | Force target reprocessing by bypassing status-cache skips. Existing files still follow file-exists settings. |
 | <code><nobr>--list-tiers &lt;creator&gt;</nobr></code> | | <p>List tiers for the given creator(s). Separate multiple creators with a comma.</p>The purpose of this is to let you find out what tier IDs to set for `posts.in.tier` filtering option under `include` section of [configuration file](#configuration-file). |
 | <code><nobr>--list-tiers-uid &lt;user ID&gt;</nobr></code> | | Same as `--list-tiers`, but takes user ID instead of vanity. |
 | <code><nobr>--list-posts &lt;creator&gt;</nobr></code> | | <p>List posts by the given creator(s). Separate multiple creators with a comma.</p> |
