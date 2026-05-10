@@ -2,3 +2,11 @@ dist/
 node_modules/
 test/
 .vscode/
+
+# Local downloader secrets and run state
+.env
+.env.*
+*.local.conf
+cookies*.txt
+downloads/
+archive-output/
