@@ -3,6 +3,7 @@ import PromptSync from 'prompt-sync';
 import path from 'path';
 import fs from 'fs';
 import Downloader, { type DownloaderConfig } from '../downloaders/Downloader.js';
+import { TargetSkipReason, type DownloaderEventPayloadOf } from '../downloaders/DownloaderEvent.js';
 import ConsoleLogger from '../utils/logging/ConsoleLogger.js';
 import { type CLIOptions, type CLITargetURLEntry, getCLIOptions } from './CLIOptions.js';
 import CommandLineParser from './CommandLineParser.js';
@@ -101,7 +102,7 @@ export default class PatreonDownloaderCLI {
     const targetsWithError: string[] = [];
     const targetEndMessages: { url: string; message: string; }[] = [];
     for (let i = 0; i < options.targetURLs.length; i++) {
-      const { hasError, aborted, endMessage } = await this.#createAndStartDownloader(options.targetURLs, i, options);
+      const { hasError, aborted, endMessage, targetDidWork } = await this.#createAndStartDownloader(options.targetURLs, i, options);
       if (aborted) {
         return this.exit(1);
       }
@@ -110,7 +111,7 @@ export default class PatreonDownloaderCLI {
         targetsWithError.push(targetURL);
       }
       targetEndMessages[i] = { url: targetURL, message: endMessage };
-      if (await this.#delayBetweenTargets(options, i)) {
+      if (await this.#delayBetweenTargets(options, i, targetDidWork)) {
         return this.exit(1);
       }
     }
@@ -243,13 +244,18 @@ export default class PatreonDownloaderCLI {
     return true;
   }
 
-  async #delayBetweenTargets(options: CLIOptions, currentTargetIndex: number) {
+  async #delayBetweenTargets(options: CLIOptions, currentTargetIndex: number, targetDidWork: boolean) {
     const delayMs = options.request?.targetDelay || 0;
     if (delayMs <= 0 || currentTargetIndex >= options.targetURLs.length - 1) {
       return false;
     }
 
     const consoleLogger = new ConsoleLogger(options.consoleLogger);
+    if (!targetDidWork) {
+      commonLog(consoleLogger, 'info', null, 'Skipping target delay; target already downloaded');
+      return false;
+    }
+
     const abortController = new AbortController();
     const abortHandler = () => {
       abortController.abort();
@@ -359,12 +365,12 @@ export default class PatreonDownloaderCLI {
     }
     catch (error) {
       commonLog(logger, 'error', null, 'Failed to get downloader instance:', error);
-      return { hasError: true, endMessage: 'Downloader init error' };
+      return { hasError: true, endMessage: 'Downloader init error', targetDidWork: true };
     }
 
     if (!downloader) {
       commonLog(logger, 'error', null, 'Failed to get downloader instance (unknown reason)');
-      return { hasError: true, endMessage: 'Downloader init error' };
+      return { hasError: true, endMessage: 'Downloader init error', targetDidWork: true };
     }
 
     const downloaderName = downloader.name;
@@ -481,7 +487,7 @@ export default class PatreonDownloaderCLI {
       }
       if (promptConfirm && !this.#confirmProceed()) {
         console.log('Abort');
-        return { aborted: true, endMessage: 'Aborted' };
+        return { aborted: true, endMessage: 'Aborted', targetDidWork: false };
       }
       if (postConfirm) {
         postConfirm();
@@ -499,6 +505,18 @@ export default class PatreonDownloaderCLI {
     let hasDownloaderError = false;
     let isAborted = false;
     let endMessage = '';
+    let primaryTargetSeen = false;
+    let primaryTargetDidWork = false;
+    downloader.on('targetEnd', (args: DownloaderEventPayloadOf<'targetEnd'>) => {
+      if (args.target.type !== 'post' && args.target.type !== 'product') {
+        return;
+      }
+      primaryTargetSeen = true;
+      primaryTargetDidWork = primaryTargetDidWork || !(
+        args.isSkipped &&
+        args.skipReason === TargetSkipReason.AlreadyDownloaded
+      );
+    });
     downloader.on('end', ({ aborted, error, message }) => {
       if (aborted) {
         commonLog(logger, 'info', null, `${downloaderName} aborted`);
@@ -523,11 +541,11 @@ export default class PatreonDownloaderCLI {
       await downloader.start({ signal: abortController.signal });
       await logger.end();
       process.off('SIGINT', abortHandler);
-      return { hasError: hasDownloaderError, aborted: isAborted, endMessage };
+      return { hasError: hasDownloaderError, aborted: isAborted, endMessage, targetDidWork: primaryTargetSeen ? primaryTargetDidWork : true };
     }
     catch (error) {
       commonLog(logger, 'error', null, `Uncaught ${downloaderName} error:`, error);
-      return { hasError: true, aborted: isAborted, endMessage: 'Uncaught error' };
+      return { hasError: true, aborted: isAborted, endMessage: 'Uncaught error', targetDidWork: true };
     }
   }
 
