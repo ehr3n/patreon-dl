@@ -122,6 +122,8 @@ $ patreon-dl [OPTION]... URL
 | <code><nobr>--list-tiers-uid &lt;user ID&gt;</nobr></code> | | Same as `--list-tiers`, but takes user ID instead of vanity. |
 | <code><nobr>--list-posts &lt;creator&gt;</nobr></code> | | <p>List posts by the given creator(s). Separate multiple creators with a comma.</p> |
 | <code><nobr>--list-posts-uid &lt;user ID&gt;</nobr></code> | | Same as `--list-posts`, but takes user ID instead of vanity. |
+| `--inventory` | | Fetch post metadata as JSONL without downloading media. |
+| <code><nobr>--inventory-out &lt;file&gt;</nobr></code> | | Path to write inventory JSONL. Defaults to `<out.dir>/.patreon-dl/inventory.jsonl`. |
 | `--configure-youtube` | | <p>Configure YouTube connection.</p>`patreon-dl` supports downloading embedded YouTube videos. If you have a YouTube Premium account, you can connect `patreon-dl` to it for downloading Premium-quality streams. You will also need to connect to an account if you get a "Login required" error message during download.|
 
 ### URL

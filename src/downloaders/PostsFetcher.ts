@@ -342,14 +342,18 @@ export default class PostsFetcher extends EventEmitter {
       if (!result) {
         let resolved = false;
         result = new Promise<PostsFetcherResult>((resolve) => {
+          const cleanup = () => {
+            this.off('fetched', fetchedListener);
+            this.off('statusChange', statusListener);
+          };
           const fetchedListener = () => {
             if (resolved) {
-              this.off('fetched', fetchedListener);
+              cleanup();
               return;
             }
             if (this.#fetched[ptr]) {
-              this.off('fetched', fetchedListener);
               resolved = true;
+              cleanup();
               resolve({
                 list: this.#fetched[ptr],
                 aborted: false
@@ -358,13 +362,13 @@ export default class PostsFetcher extends EventEmitter {
           };
           const statusListener = (args: { current: PostsFetcherStatus }) => {
             if (resolved) {
-              this.off('statusChange', statusListener);
+              cleanup();
               return;
             }
             const { list, aborted, error } = __parseStatus(args.current);
             if (list !== undefined) {
-              this.off('statusChange', statusListener);
               resolved = true;
+              cleanup();
               resolve({ list, aborted, error });
             }
           };

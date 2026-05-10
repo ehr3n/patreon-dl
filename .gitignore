@@ -2,6 +2,7 @@ dist/
 node_modules/
 test/
 .vscode/
+.DS_Store
 
 # Local downloader secrets and run state
 .env

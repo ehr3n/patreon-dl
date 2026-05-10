@@ -27,6 +27,8 @@ const COMMAND_LINE_ARGS = {
   listTiersByUserId: 'list-tiers-uid',
   listPosts: 'list-posts',
   listPostsByUserId: 'list-posts-uid',
+  inventory: 'inventory',
+  inventoryOut: 'inventory-out',
   debugAPI: 'debug-api'
 } as const;
 
@@ -121,6 +123,17 @@ const OPT_DEFS = [
     typeLabel: '<user ID>'
   },
   {
+    name: COMMAND_LINE_ARGS.inventory,
+    description: 'Fetch post metadata inventory as JSONL without downloading media.',
+    type: Boolean
+  },
+  {
+    name: COMMAND_LINE_ARGS.inventoryOut,
+    description: 'Path to write inventory JSONL. Defaults to <out.dir>/.patreon-dl/inventory.jsonl.',
+    type: String,
+    typeLabel: '<file>'
+  },
+  {
     name: COMMAND_LINE_ARGS.configureYouTube,
     description: 'Configure YouTube connection',
     type: Boolean
@@ -156,6 +169,7 @@ export default class CommandLineParser {
       const booleanTypeArgs = [
         COMMAND_LINE_ARGS.noPrompt,
         COMMAND_LINE_ARGS.dryRun,
+        COMMAND_LINE_ARGS.inventory,
         COMMAND_LINE_ARGS.debugAPI
       ];
       if (booleanTypeArgs.includes(key as any) && value !== undefined) {
@@ -217,6 +231,7 @@ export default class CommandLineParser {
         maxRetries: undefined,
         maxConcurrent: undefined,
         minTime: undefined,
+        pageDelay: undefined,
         postDelay: undefined,
         userAgent: undefined
       },
@@ -355,6 +370,35 @@ export default class CommandLineParser {
 
   static listPosts() {
     return this.#listX('posts');
+  }
+
+  static inventory() {
+    let opts: commandLineArgs.CommandLineOptions;
+    try {
+      opts = this.#parseArgs();
+    }
+    catch (_error: unknown) {
+      return false;
+    }
+    return !!opts[COMMAND_LINE_ARGS.inventory];
+  }
+
+  static inventoryOut() {
+    let opts: commandLineArgs.CommandLineOptions;
+    try {
+      opts = this.#parseArgs();
+    }
+    catch (_error: unknown) {
+      return undefined;
+    }
+    const value = opts[COMMAND_LINE_ARGS.inventoryOut];
+    if (value === null) {
+      throw Error(`'--${COMMAND_LINE_ARGS.inventoryOut}' missing value`);
+    }
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim();
+    }
+    return undefined;
   }
 
   static #parseArgs() {
