@@ -77,6 +77,7 @@ export interface DownloaderOptions {
     maxRetries?: number;
     maxConcurrent?: number;
     minTime?: number;
+    postDelay?: number;
     proxy?: ProxyOptions | null;
     userAgent?: string;
   };
@@ -153,6 +154,7 @@ const DEFAULT_DOWNLOADER_INIT: DownloaderInit = {
     maxRetries: 3,
     maxConcurrent: 10,
     minTime: 333,
+    postDelay: 0,
     proxy: {
       url: '',
       rejectUnauthorizedTLS: true
@@ -228,6 +230,7 @@ export function getDownloaderInit(options?: DownloaderOptions): DownloaderInit {
       maxRetries: pickDefined(options?.request?.maxRetries, defaults.request.maxRetries),
       maxConcurrent: pickDefined(options?.request?.maxConcurrent, defaults.request.maxConcurrent),
       minTime: pickDefined(options?.request?.minTime, defaults.request.minTime),
+      postDelay: pickDefined(options?.request?.postDelay, defaults.request.postDelay),
       proxy,
       userAgent: pickDefined(options?.request?.userAgent, defaults.request.userAgent)
     },

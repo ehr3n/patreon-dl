@@ -88,6 +88,7 @@ export function getCLIOptions(skipTargetURLs = false): CLIOptions | Omit<CLIOpti
       maxRetries: CLIOptionValidator.validateNumber(pickDefined(commandLineOptions?.request?.maxRetries, configFileOptions?.request?.maxRetries)),
       maxConcurrent: CLIOptionValidator.validateNumber(pickDefined(commandLineOptions?.request?.maxConcurrent, configFileOptions?.request?.maxConcurrent)),
       minTime: CLIOptionValidator.validateNumber(pickDefined(commandLineOptions?.request?.minTime, configFileOptions?.request?.minTime)),
+      postDelay: CLIOptionValidator.validateNumber(pickDefined(commandLineOptions?.request?.postDelay, configFileOptions?.request?.postDelay), 0),
       proxy,
       userAgent: CLIOptionValidator.validateString(pickDefined(commandLineOptions?.request?.userAgent, configFileOptions?.request?.userAgent))
     },

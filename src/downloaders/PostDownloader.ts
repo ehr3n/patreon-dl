@@ -21,6 +21,7 @@ import { type Campaign } from '../entities/Campaign.js';
 import type DownloadTaskBatch from './task/DownloadTaskBatch.js';
 import { generateCollectionSummary } from './templates/CollectionInfo.js';
 import { IncludeCriteriaHelper } from './IncludeCriteriaHelper.js';
+import Sleeper from '../utils/Sleeper.js';
 
 export interface PostDownloaderContext {
   skipSaveCampaign?: boolean;
@@ -139,11 +140,12 @@ export default class PostDownloader extends Downloader<Post> {
           }
         }
 
-        for (const _post of list.items) {
+        for (const [postIndex, _post] of list.items.entries()) {
 
           if (stopConditionMet) {
             break;
           }
+          const hasMoreInCurrentList = postIndex < list.items.length - 1;
 
           let post = _post;
 
@@ -251,6 +253,11 @@ export default class PostDownloader extends Downloader<Post> {
               break;
           }
 
+          if (this.checkAbortSignal(signal)) {
+            return;
+          }
+
+          await this.#delayBeforeNextPost(postsFetcher, hasMoreInCurrentList, signal);
           if (this.checkAbortSignal(signal)) {
             return;
           }
@@ -610,6 +617,26 @@ export default class PostDownloader extends Downloader<Post> {
 
   #isFetchingMultiplePosts(postFetch: DownloaderConfig<Post>['postFetch']): postFetch is DownloaderConfig<Post>['postFetch'] & { type: 'byUser' | 'byUserId' | 'byCollection' | 'byURL' } {
     return postFetch.type === 'byUser' || postFetch.type === 'byUserId' || postFetch.type === 'byCollection' || postFetch.type === 'byURL';
+  }
+
+  async #delayBeforeNextPost(postsFetcher: PostsFetcher, hasMoreInCurrentList: boolean, signal?: AbortSignal) {
+    const delayMs = this.config.request.postDelay;
+    if (
+      delayMs <= 0 ||
+      !this.#isFetchingMultiplePosts(this.config.postFetch) ||
+      (!hasMoreInCurrentList && !postsFetcher.hasNext())
+    ) {
+      return;
+    }
+    this.log('info', `Waiting ${delayMs / 1000} seconds before next post`);
+    try {
+      await Sleeper.getInstance(delayMs, signal).start();
+    }
+    catch (error) {
+      if (!signal?.aborted) {
+        throw error;
+      }
+    }
   }
 
   async __getCampaign(signal?: AbortSignal) {

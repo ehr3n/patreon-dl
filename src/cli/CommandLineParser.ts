@@ -217,6 +217,7 @@ export default class CommandLineParser {
         maxRetries: undefined,
         maxConcurrent: undefined,
         minTime: undefined,
+        postDelay: undefined,
         userAgent: undefined
       },
       fileExistsAction: {

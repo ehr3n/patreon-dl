@@ -49,6 +49,7 @@ const CONFIG_FILE_PROPS = {
     maxRetries: 'request:max.retries',
     maxConcurrent: 'request:max.concurrent',
     minTime: 'request:min.time',
+    postDelay: 'request:post.delay',
     proxy: {
       url: 'request:proxy.url',
       rejectUnauthorizedTLS: 'request:proxy.reject.unauthorized.tls'
@@ -148,6 +149,7 @@ export default class ConfigFileParser {
         maxRetries: __getValue(CONFIG_FILE_PROPS.request.maxRetries),
         maxConcurrent: __getValue(CONFIG_FILE_PROPS.request.maxConcurrent),
         minTime: __getValue(CONFIG_FILE_PROPS.request.minTime),
+        postDelay: __getValue(CONFIG_FILE_PROPS.request.postDelay),
         proxy: {
           url: __getValue(CONFIG_FILE_PROPS.request.proxy.url),
           rejectUnauthorizedTLS: __getValue(CONFIG_FILE_PROPS.request.proxy.rejectUnauthorizedTLS),
