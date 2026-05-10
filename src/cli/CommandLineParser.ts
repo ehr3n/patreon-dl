@@ -282,6 +282,7 @@ export default class CommandLineParser {
         minTime: undefined,
         pageDelay: undefined,
         postDelay: undefined,
+        targetDelay: undefined,
         userAgent: undefined
       },
       fileExistsAction: {

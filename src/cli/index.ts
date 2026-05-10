@@ -19,6 +19,7 @@ import copy from 'fast-copy';
 import cliTruncate from 'cli-truncate';
 import type deepFreeze from 'deep-freeze';
 import { isDenoInstalled, type DeepPartial } from '../utils/Misc.js';
+import Sleeper from '../utils/Sleeper.js';
 import { createProxyAgent } from '../utils/Proxy.js';
 import { type Product } from '../entities/Product.js';
 import { type Post } from '../entities/Post.js';
@@ -104,6 +105,9 @@ export default class PatreonDownloaderCLI {
         targetsWithError.push(targetURL);
       }
       targetEndMessages[i] = { url: targetURL, message: endMessage };
+      if (await this.#delayBetweenTargets(options, i)) {
+        return this.exit(1);
+      }
     }
     if (options.targetURLs.length > 0) {
       // Print summary
@@ -221,6 +225,33 @@ export default class PatreonDownloaderCLI {
     }
     await this.exit(result.hasError ? 1 : 0);
     return true;
+  }
+
+  async #delayBetweenTargets(options: CLIOptions, currentTargetIndex: number) {
+    const delayMs = options.request?.targetDelay || 0;
+    if (delayMs <= 0 || currentTargetIndex >= options.targetURLs.length - 1) {
+      return false;
+    }
+
+    const consoleLogger = new ConsoleLogger(options.consoleLogger);
+    const abortController = new AbortController();
+    const abortHandler = () => {
+      abortController.abort();
+    };
+
+    commonLog(consoleLogger, 'info', null, `Waiting ${delayMs / 1000} seconds before next target`);
+    process.on('SIGINT', abortHandler);
+    try {
+      await Sleeper.getInstance(delayMs, abortController.signal).start();
+    }
+    catch (_error: unknown) {
+      commonLog(consoleLogger, 'warn', null, 'Abort');
+      return true;
+    }
+    finally {
+      process.off('SIGINT', abortHandler);
+    }
+    return false;
   }
 
   #getYouTubeCredentialsPath() {

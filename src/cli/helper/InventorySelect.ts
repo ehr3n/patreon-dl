@@ -189,8 +189,7 @@ function getTargetIncludeLines(mediaTypes: ContentMediaType[]) {
   const mediaList = mediaTypes.join(',');
   return [
     `include.posts.with.media.type = ${mediaList}`,
-    `include.content.media = ${mediaList}`,
-    'include.preview.media = 0'
+    'include.content.media = 1'
   ];
 }
 

@@ -90,6 +90,7 @@ export function getCLIOptions(skipTargetURLs = false): CLIOptions | Omit<CLIOpti
       minTime: CLIOptionValidator.validateNumber(pickDefined(commandLineOptions?.request?.minTime, configFileOptions?.request?.minTime)),
       pageDelay: CLIOptionValidator.validateNumber(pickDefined(commandLineOptions?.request?.pageDelay, configFileOptions?.request?.pageDelay), 0),
       postDelay: CLIOptionValidator.validateNumber(pickDefined(commandLineOptions?.request?.postDelay, configFileOptions?.request?.postDelay), 0),
+      targetDelay: CLIOptionValidator.validateNumber(pickDefined(commandLineOptions?.request?.targetDelay, configFileOptions?.request?.targetDelay), 0),
       proxy,
       userAgent: CLIOptionValidator.validateString(pickDefined(commandLineOptions?.request?.userAgent, configFileOptions?.request?.userAgent))
     },

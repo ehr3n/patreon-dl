@@ -135,7 +135,7 @@ $ patreon-dl [OPTION]... URL
 
 ### Inventory workflow
 
-Use inventory mode to catalog posts without downloading media, then select post URLs from that catalog for a normal download run:
+Use inventory mode to catalog posts without downloading media, then select post URLs from that catalog for a normal download run. Selection filters choose which posts to download; selected posts are downloaded with their full content media unless your config overrides them.
 
 ```
 $ patreon-dl -C creator.local.conf --inventory

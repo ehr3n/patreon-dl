@@ -51,6 +51,7 @@ const CONFIG_FILE_PROPS = {
     minTime: 'request:min.time',
     pageDelay: 'request:page.delay',
     postDelay: 'request:post.delay',
+    targetDelay: 'request:target.delay',
     proxy: {
       url: 'request:proxy.url',
       rejectUnauthorizedTLS: 'request:proxy.reject.unauthorized.tls'
@@ -152,6 +153,7 @@ export default class ConfigFileParser {
         minTime: __getValue(CONFIG_FILE_PROPS.request.minTime),
         pageDelay: __getValue(CONFIG_FILE_PROPS.request.pageDelay),
         postDelay: __getValue(CONFIG_FILE_PROPS.request.postDelay),
+        targetDelay: __getValue(CONFIG_FILE_PROPS.request.targetDelay),
         proxy: {
           url: __getValue(CONFIG_FILE_PROPS.request.proxy.url),
           rejectUnauthorizedTLS: __getValue(CONFIG_FILE_PROPS.request.proxy.rejectUnauthorizedTLS),

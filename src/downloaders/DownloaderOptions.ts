@@ -79,6 +79,7 @@ export interface DownloaderOptions {
     minTime?: number;
     pageDelay?: number;
     postDelay?: number;
+    targetDelay?: number;
     proxy?: ProxyOptions | null;
     userAgent?: string;
   };
@@ -157,6 +158,7 @@ const DEFAULT_DOWNLOADER_INIT: DownloaderInit = {
     minTime: 333,
     pageDelay: 0,
     postDelay: 0,
+    targetDelay: 0,
     proxy: {
       url: '',
       rejectUnauthorizedTLS: true
@@ -234,6 +236,7 @@ export function getDownloaderInit(options?: DownloaderOptions): DownloaderInit {
       minTime: pickDefined(options?.request?.minTime, defaults.request.minTime),
       pageDelay: pickDefined(options?.request?.pageDelay, defaults.request.pageDelay),
       postDelay: pickDefined(options?.request?.postDelay, defaults.request.postDelay),
+      targetDelay: pickDefined(options?.request?.targetDelay, defaults.request.targetDelay),
       proxy,
       userAgent: pickDefined(options?.request?.userAgent, defaults.request.userAgent)
     },
