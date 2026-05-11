@@ -18,6 +18,8 @@ type InventoryRunRecord = {
   startedAt?: string;
   limit?: number | null;
   targets?: string[];
+  resumed?: boolean;
+  existingPosts?: number;
 };
 
 type InventorySummaryRecord = {
@@ -27,6 +29,10 @@ type InventorySummaryRecord = {
   limited?: boolean;
   limit?: number | null;
   totalPosts?: number;
+  existingPosts?: number;
+  newPosts?: number;
+  skippedExistingPosts?: number;
+  resumed?: boolean;
 };
 
 type InventoryRecords = {
@@ -152,8 +158,22 @@ function printReport(args: {
     console.log(`Completed: ${latestSummary.completedAt}`);
   }
   console.log(`Posts: ${records.posts.length}`);
+  if (latestRun?.resumed) {
+    console.log(`Resume: existingPosts=${latestRun.existingPosts || 0}`);
+  }
   if (latestSummary) {
-    console.log(`Summary: aborted=${!!latestSummary.aborted}; limited=${!!latestSummary.limited}; limit=${latestSummary.limit || 'none'}`);
+    const summary = [
+      `aborted=${!!latestSummary.aborted}`,
+      `limited=${!!latestSummary.limited}`,
+      `limit=${latestSummary.limit || 'none'}`
+    ];
+    if (latestSummary.newPosts !== undefined) {
+      summary.push(`newPosts=${latestSummary.newPosts}`);
+    }
+    if (latestSummary.skippedExistingPosts !== undefined) {
+      summary.push(`skippedExistingPosts=${latestSummary.skippedExistingPosts}`);
+    }
+    console.log(`Summary: ${summary.join('; ')}`);
   }
 
   printCounts('Posts by content media', inventoryStats.postsByMediaType, CONTENT_MEDIA_TYPES);

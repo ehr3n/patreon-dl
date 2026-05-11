@@ -26,17 +26,38 @@ type InventoryMedia = {
   hasDownloadURL: boolean;
 };
 
+type InventoryCheckpointRecord = {
+  type?: string;
+  targetURL?: string | null;
+  nextURL?: string | null;
+  complete?: boolean;
+  checkpointedAt?: string;
+  pageCount?: number;
+  totalPosts?: number;
+  newPosts?: number;
+  skippedExistingPosts?: number;
+};
+
+type InventoryResumeState = {
+  postKeys: Set<string>;
+  postKeysByTargetURL: Map<string, Set<string>>;
+  checkpointsByTargetURL: Map<string, InventoryCheckpointRecord>;
+  recoveredTrailingRecord: boolean;
+};
+
 export async function inventoryPosts(options: {
   onOptionError: (error: unknown) => Promise<void>;
 }): Promise<InventoryPostsResult> {
   let inventoryOut: string | undefined;
   let inventoryLimit: number | undefined;
+  let inventoryResume = false;
   try {
     if (!CommandLineParser.inventory()) {
       return false;
     }
     inventoryOut = CommandLineParser.inventoryOut();
     inventoryLimit = parseInventoryLimit(CommandLineParser.inventoryLimit());
+    inventoryResume = CommandLineParser.inventoryResume();
   }
   catch (error) {
     await options.onOptionError(error);
@@ -64,7 +85,11 @@ export async function inventoryPosts(options: {
   let hasError = false;
   let output: fs.WriteStream | null = null;
   let outputPath: string | null = null;
+  let resumeState: InventoryResumeState | null = null;
+  let initialExistingPosts = 0;
   let totalPosts = 0;
+  let newPosts = 0;
+  let skippedExistingPosts = 0;
   let hitLimit = false;
   const startedAt = new Date().toISOString();
 
@@ -85,27 +110,66 @@ export async function inventoryPosts(options: {
       const config = downloader.getConfig(false);
       if (!output) {
         outputPath = inventoryOut || path.resolve(config.outDir, '.patreon-dl', 'inventory.jsonl');
-        output = openInventoryOutput(outputPath);
+        if (inventoryResume) {
+          const recoveredTrailingRecord = recoverTrailingInventoryRecord(outputPath);
+          resumeState = readInventoryResumeState(outputPath);
+          resumeState.recoveredTrailingRecord = recoveredTrailingRecord;
+          initialExistingPosts = resumeState.postKeys.size;
+          totalPosts = initialExistingPosts;
+          if (resumeState.recoveredTrailingRecord) {
+            commonLog(consoleLogger, 'warn', null, 'Recovered inventory checkpoint by removing an incomplete trailing JSONL record');
+          }
+          if (initialExistingPosts > 0) {
+            commonLog(consoleLogger, 'info', null, `Inventory resume checkpoint: ${initialExistingPosts} existing posts`);
+          }
+        }
+        else {
+          resumeState = createEmptyResumeState();
+        }
+        output = openInventoryOutput(outputPath, inventoryResume);
         await writeJSONL(output, {
           type: 'inventoryRun',
           schemaVersion: 1,
           startedAt,
           limit: inventoryLimit || null,
+          resumed: inventoryResume,
+          existingPosts: initialExistingPosts,
           targets: cliOptions.targetURLs.map((t) => t.url)
         });
       }
 
+      if (!resumeState) {
+        resumeState = createEmptyResumeState();
+      }
+      if (inventoryLimit && totalPosts >= inventoryLimit) {
+        hitLimit = true;
+        commonLog(consoleLogger, 'info', null, `Inventory limit already satisfied by checkpoint: ${totalPosts} posts`);
+        break;
+      }
+
+      const targetCheckpoint = inventoryResume ? resumeState.checkpointsByTargetURL.get(target.url) : undefined;
+      if (targetCheckpoint?.complete) {
+        commonLog(consoleLogger, 'info', null, `Inventory target already complete in checkpoint: ${target.url}`);
+        continue;
+      }
+      const resumeAPIURL = inventoryResume ? targetCheckpoint?.nextURL || undefined : undefined;
       const postsFetcher = new PostsFetcher({
         config,
         fetcher: downloader.getFetcher(),
         logger: warnLogger,
-        signal: abortController.signal
+        signal: abortController.signal,
+        initialPostsAPIURL: resumeAPIURL
       });
 
       commonLog(consoleLogger, 'info', null, `Inventory target: ${target.url}`);
+      if (resumeAPIURL) {
+        commonLog(consoleLogger, 'info', null, `Resuming inventory target from checkpoint: ${targetCheckpoint?.totalPosts ?? totalPosts} posts`);
+      }
       postsFetcher.begin();
       let targetPostCount = 0;
+      let targetSkippedExistingPosts = 0;
       let pageCount = 0;
+      const targetPostKeys = getTargetPostKeys(resumeState, target.url);
       while (postsFetcher.hasNext()) {
         const { list, aborted, error } = await postsFetcher.next();
         if (aborted || abortController.signal.aborted) {
@@ -119,16 +183,46 @@ export async function inventoryPosts(options: {
           break;
         }
         pageCount++;
+        let pageFullyProcessed = true;
         for (const post of list.items) {
           if (inventoryLimit && totalPosts >= inventoryLimit) {
             hitLimit = true;
+            pageFullyProcessed = false;
             break;
           }
+          const postKey = getPostCheckpointKey(post);
+          if (postKey && resumeState.postKeys.has(postKey)) {
+            targetSkippedExistingPosts++;
+            skippedExistingPosts++;
+            targetPostKeys.add(postKey);
+            continue;
+          }
           await writeJSONL(output, createPostInventoryRecord(post, target.url));
+          if (postKey) {
+            resumeState.postKeys.add(postKey);
+            targetPostKeys.add(postKey);
+          }
           targetPostCount++;
+          newPosts++;
           totalPosts++;
         }
-        commonLog(consoleLogger, 'info', null, `Inventoried posts: ${targetPostCount} / ${list.total ?? '?'}`);
+        if (pageFullyProcessed) {
+          const checkpoint = {
+            type: 'inventoryCheckpoint',
+            schemaVersion: 1,
+            targetURL: target.url,
+            checkpointedAt: new Date().toISOString(),
+            pageCount,
+            totalPosts,
+            newPosts,
+            skippedExistingPosts,
+            nextURL: list.nextURL,
+            complete: !list.nextURL
+          };
+          await writeJSONL(output, checkpoint);
+          resumeState.checkpointsByTargetURL.set(target.url, checkpoint);
+        }
+        commonLog(consoleLogger, 'info', null, `Inventoried posts: ${targetPostKeys.size} / ${list.total ?? '?'}`);
         if (inventoryLimit && totalPosts >= inventoryLimit) {
           hitLimit = true;
           commonLog(consoleLogger, 'info', null, `Inventory limit reached: ${totalPosts} posts`);
@@ -140,7 +234,7 @@ export async function inventoryPosts(options: {
           await Sleeper.getInstance(config.request.pageDelay, abortController.signal).start();
         }
       }
-      commonLog(consoleLogger, 'info', null, `Inventory target complete: ${targetPostCount} posts across ${pageCount} pages`);
+      commonLog(consoleLogger, 'info', null, `Inventory target complete: ${targetPostCount} new posts, ${targetSkippedExistingPosts} existing posts skipped across ${pageCount} pages`);
       if (hitLimit) {
         break;
       }
@@ -163,7 +257,11 @@ export async function inventoryPosts(options: {
         aborted: abortController.signal.aborted && !hitLimit,
         limited: hitLimit,
         limit: inventoryLimit || null,
-        totalPosts
+        totalPosts,
+        existingPosts: initialExistingPosts,
+        newPosts,
+        skippedExistingPosts,
+        resumed: inventoryResume
       });
       await new Promise<void>((resolve) => inventoryOutput.end(resolve));
       if (outputPath) {
@@ -186,9 +284,101 @@ function parseInventoryLimit(value?: number) {
   return value;
 }
 
-function openInventoryOutput(file: string) {
+function createEmptyResumeState(): InventoryResumeState {
+  return {
+    postKeys: new Set(),
+    postKeysByTargetURL: new Map(),
+    checkpointsByTargetURL: new Map(),
+    recoveredTrailingRecord: false
+  };
+}
+
+function readInventoryResumeState(file: string) {
+  const state = createEmptyResumeState();
+  if (!fs.existsSync(file)) {
+    return state;
+  }
+  const lines = fs.readFileSync(file, 'utf-8').replace(/\r\n/g, '\n').split('\n');
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      continue;
+    }
+    let record: any;
+    try {
+      record = JSON.parse(trimmed);
+    }
+    catch (_error: unknown) {
+      continue;
+    }
+    if (record.type === 'post') {
+      const postKey = getInventoryRecordCheckpointKey(record);
+      if (postKey) {
+        state.postKeys.add(postKey);
+        if (record.targetURL) {
+          getTargetPostKeys(state, record.targetURL).add(postKey);
+        }
+      }
+    }
+    else if (record.type === 'inventoryCheckpoint' && record.targetURL) {
+      state.checkpointsByTargetURL.set(record.targetURL, record);
+    }
+  }
+  return state;
+}
+
+function recoverTrailingInventoryRecord(file: string) {
+  if (!fs.existsSync(file)) {
+    return false;
+  }
+  const content = fs.readFileSync(file, 'utf-8');
+  if (!content.trim()) {
+    return false;
+  }
+  const lastLineStart = Math.max(content.lastIndexOf('\n', content.length - 2) + 1, 0);
+  const lastLine = content.slice(lastLineStart).trim();
+  if (!lastLine) {
+    return false;
+  }
+  try {
+    JSON.parse(lastLine);
+    if (!content.endsWith('\n')) {
+      fs.appendFileSync(file, '\n', 'utf-8');
+    }
+    return false;
+  }
+  catch (_error: unknown) {
+    fs.truncateSync(file, lastLineStart);
+    return true;
+  }
+}
+
+function getTargetPostKeys(state: InventoryResumeState, targetURL: string) {
+  let keys = state.postKeysByTargetURL.get(targetURL);
+  if (!keys) {
+    keys = new Set();
+    state.postKeysByTargetURL.set(targetURL, keys);
+  }
+  return keys;
+}
+
+function getInventoryRecordCheckpointKey(record: { id?: string | null; url?: string | null; }) {
+  if (record.id) {
+    return `id:${record.id}`;
+  }
+  if (record.url) {
+    return `url:${record.url}`;
+  }
+  return null;
+}
+
+function getPostCheckpointKey(post: Post) {
+  return getInventoryRecordCheckpointKey(post);
+}
+
+function openInventoryOutput(file: string, append: boolean) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  return fs.createWriteStream(file, { encoding: 'utf-8', flags: 'w' });
+  return fs.createWriteStream(file, { encoding: 'utf-8', flags: append ? 'a' : 'w' });
 }
 
 async function writeJSONL(output: fs.WriteStream, data: unknown) {

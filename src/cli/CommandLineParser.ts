@@ -31,6 +31,7 @@ const COMMAND_LINE_ARGS = {
   inventory: 'inventory',
   inventoryOut: 'inventory-out',
   inventoryLimit: 'inventory-limit',
+  inventoryResume: 'inventory-resume',
   inventoryReport: 'inventory-report',
   inventorySelect: 'inventory-select',
   inventoryIn: 'inventory-in',
@@ -150,9 +151,14 @@ const OPT_DEFS = [
   },
   {
     name: COMMAND_LINE_ARGS.inventoryLimit,
-    description: 'Maximum number of post records to write during inventory.',
+    description: 'Maximum total unique post records to inventory. With --inventory-resume, existing records count toward the limit.',
     type: Number,
     typeLabel: '<number>'
+  },
+  {
+    name: COMMAND_LINE_ARGS.inventoryResume,
+    description: 'Resume inventory from an existing JSONL checkpoint instead of overwriting it.',
+    type: Boolean
   },
   {
     name: COMMAND_LINE_ARGS.inventoryReport,
@@ -238,6 +244,7 @@ export default class CommandLineParser {
         COMMAND_LINE_ARGS.dryRun,
         COMMAND_LINE_ARGS.force,
         COMMAND_LINE_ARGS.inventory,
+        COMMAND_LINE_ARGS.inventoryResume,
         COMMAND_LINE_ARGS.inventoryReport,
         COMMAND_LINE_ARGS.inventorySelect,
         COMMAND_LINE_ARGS.debugAPI
@@ -471,6 +478,17 @@ export default class CommandLineParser {
 
   static inventoryLimit() {
     return this.#getNumberOption(COMMAND_LINE_ARGS.inventoryLimit);
+  }
+
+  static inventoryResume() {
+    let opts: commandLineArgs.CommandLineOptions;
+    try {
+      opts = this.#parseArgs();
+    }
+    catch (_error: unknown) {
+      return false;
+    }
+    return !!opts[COMMAND_LINE_ARGS.inventoryResume];
   }
 
   static inventoryReport() {

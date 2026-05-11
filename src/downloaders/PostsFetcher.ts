@@ -61,19 +61,22 @@ export default class PostsFetcher extends EventEmitter {
   #nextPromises: Array<Promise<PostsFetcherResult> | undefined>;
   #sleeper: Sleeper | null;
   #noSleep: boolean;
+  #initialPostsAPIURL?: string;
 
   constructor(params: {
     config: DownloaderConfig<Post>,
     fetcher: Fetcher,
     logger?: Logger | null,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    initialPostsAPIURL?: string
   }) {
     super();
-    const { config, fetcher, logger, signal } = params;
+    const { config, fetcher, logger, signal, initialPostsAPIURL } = params;
     this.config = config;
     this.fetcher = fetcher;
     this.logger = logger;
     this.signal = signal;
+    this.#initialPostsAPIURL = initialPostsAPIURL;
     this.#fetched = [];
     this.status = { status: 'ready' };
     this.#pointers = {
@@ -124,7 +127,14 @@ export default class PostsFetcher extends EventEmitter {
     const postFetch = this.config.postFetch;
     
     let postsSrc: string;
-    if (postFetch.type !== 'byFile') {
+    if (this.#initialPostsAPIURL) {
+      if (!this.#isFetchingMultiplePosts(postFetch)) {
+        this.#handleError(Error('Initial posts API URL override is only supported for multi-post fetches'));
+        return;
+      }
+      postsSrc = this.#initialPostsAPIURL;
+    }
+    else if (postFetch.type !== 'byFile') {
       try {
         postsSrc = await this.#getInitialPostsAPIURL();
       }
