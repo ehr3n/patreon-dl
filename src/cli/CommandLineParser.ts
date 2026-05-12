@@ -38,6 +38,8 @@ const COMMAND_LINE_ARGS = {
   inventorySelect: 'inventory-select',
   inventoryIn: 'inventory-in',
   deltaIn: 'delta-in',
+  harvestReport: 'harvest-report',
+  dbIn: 'db-in',
   targetIn: 'target-in',
   targetOut: 'target-out',
   selectMedia: 'select-media',
@@ -184,6 +186,11 @@ const OPT_DEFS = [
     type: Boolean
   },
   {
+    name: COMMAND_LINE_ARGS.harvestReport,
+    description: 'Read inventory, targets, database, and status cache to report harvest coverage.',
+    type: Boolean
+  },
+  {
     name: COMMAND_LINE_ARGS.inventoryIn,
     description: 'Path to read inventory JSONL. Defaults to <out.dir>/.patreon-dl/inventory.jsonl.',
     type: String,
@@ -192,6 +199,12 @@ const OPT_DEFS = [
   {
     name: COMMAND_LINE_ARGS.deltaIn,
     description: 'Path to read delta inventory JSONL for --inventory-merge. Defaults to <out.dir>/.patreon-dl/inventory-delta.jsonl.',
+    type: String,
+    typeLabel: '<file>'
+  },
+  {
+    name: COMMAND_LINE_ARGS.dbIn,
+    description: 'Path to read downloader SQLite database. Defaults to <out.dir>/.patreon-dl/db.sqlite.',
     type: String,
     typeLabel: '<file>'
   },
@@ -268,6 +281,7 @@ export default class CommandLineParser {
         COMMAND_LINE_ARGS.inventoryResume,
         COMMAND_LINE_ARGS.inventoryReport,
         COMMAND_LINE_ARGS.inventorySelect,
+        COMMAND_LINE_ARGS.harvestReport,
         COMMAND_LINE_ARGS.debugAPI
       ];
       if (booleanTypeArgs.includes(key as any) && value !== undefined) {
@@ -556,12 +570,27 @@ export default class CommandLineParser {
     return !!opts[COMMAND_LINE_ARGS.inventorySelect];
   }
 
+  static harvestReport() {
+    let opts: commandLineArgs.CommandLineOptions;
+    try {
+      opts = this.#parseArgs();
+    }
+    catch (_error: unknown) {
+      return false;
+    }
+    return !!opts[COMMAND_LINE_ARGS.harvestReport];
+  }
+
   static inventoryIn() {
     return this.#getStringOption(COMMAND_LINE_ARGS.inventoryIn);
   }
 
   static deltaIn() {
     return this.#getStringOption(COMMAND_LINE_ARGS.deltaIn);
+  }
+
+  static dbIn() {
+    return this.#getStringOption(COMMAND_LINE_ARGS.dbIn);
   }
 
   static targetIn() {

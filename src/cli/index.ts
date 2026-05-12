@@ -29,6 +29,7 @@ import { inventoryPosts } from './helper/PostInventory.js';
 import { mergeInventory } from './helper/InventoryMerge.js';
 import { reportInventory } from './helper/InventoryReport.js';
 import { selectInventoryTargets } from './helper/InventorySelect.js';
+import { harvestReport } from './helper/HarvestReport.js';
 
 const YT_CREDENTIALS_FILENAME = 'youtube-credentials.json';
 
@@ -89,6 +90,10 @@ export default class PatreonDownloaderCLI {
     }
 
     if (await this.#reportInventory()) {
+      return;
+    }
+
+    if (await this.#harvestReport()) {
       return;
     }
 
@@ -240,6 +245,17 @@ export default class PatreonDownloaderCLI {
 
   async #reportInventory(): Promise<boolean> {
     const result = await reportInventory({
+      onOptionError: (error) => this.#printOptionError(error)
+    });
+    if (!result) {
+      return false;
+    }
+    await this.exit(result.hasError ? 1 : 0);
+    return true;
+  }
+
+  async #harvestReport(): Promise<boolean> {
+    const result = await harvestReport({
       onOptionError: (error) => this.#printOptionError(error)
     });
     if (!result) {
