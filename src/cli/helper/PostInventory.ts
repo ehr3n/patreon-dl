@@ -11,6 +11,7 @@ import type { Downloadable } from '../../entities/Downloadable.js';
 import type { MediaItem } from '../../entities/MediaItem.js';
 import type { Collection, Post, PostEmbed } from '../../entities/Post.js';
 import Sleeper from '../../utils/Sleeper.js';
+import type { InventoryPostRecord } from './InventorySelect.js';
 
 export type InventoryPostsResult = false | {
   hasError: boolean;
@@ -36,6 +37,9 @@ type InventoryCheckpointRecord = {
   totalPosts?: number;
   newPosts?: number;
   skippedExistingPosts?: number;
+  updatedPosts?: number;
+  deltaPosts?: number;
+  stopReason?: string;
 };
 
 type InventoryResumeState = {
@@ -45,16 +49,48 @@ type InventoryResumeState = {
   recoveredTrailingRecord: boolean;
 };
 
+type InventoryBaseState = {
+  postKeys: Set<string>;
+  postsByKey: Map<string, InventoryPostRecord>;
+};
+
+const DEFAULT_INVENTORY_FILENAME = 'inventory.jsonl';
+const DEFAULT_DELTA_INVENTORY_FILENAME = 'inventory-delta.jsonl';
+
 export async function inventoryPosts(options: {
+  onOptionError: (error: unknown) => Promise<void>;
+}): Promise<InventoryPostsResult> {
+  let inventory = false;
+  let inventoryDelta = false;
+  try {
+    inventory = CommandLineParser.inventory();
+    inventoryDelta = CommandLineParser.inventoryDelta();
+    if (!inventory && !inventoryDelta) {
+      return false;
+    }
+    if (inventory && inventoryDelta) {
+      throw Error("'--inventory' and '--inventory-delta' cannot be used together");
+    }
+  }
+  catch (error) {
+    await options.onOptionError(error);
+    return { hasError: true };
+  }
+
+  if (inventoryDelta) {
+    return inventoryDeltaPosts(options);
+  }
+
+  return inventoryAllPosts(options);
+}
+
+async function inventoryAllPosts(options: {
   onOptionError: (error: unknown) => Promise<void>;
 }): Promise<InventoryPostsResult> {
   let inventoryOut: string | undefined;
   let inventoryLimit: number | undefined;
   let inventoryResume = false;
   try {
-    if (!CommandLineParser.inventory()) {
-      return false;
-    }
     inventoryOut = CommandLineParser.inventoryOut();
     inventoryLimit = parseInventoryLimit(CommandLineParser.inventoryLimit());
     inventoryResume = CommandLineParser.inventoryResume();
@@ -109,7 +145,7 @@ export async function inventoryPosts(options: {
 
       const config = downloader.getConfig(false);
       if (!output) {
-        outputPath = inventoryOut || path.resolve(config.outDir, '.patreon-dl', 'inventory.jsonl');
+        outputPath = inventoryOut || path.resolve(config.outDir, '.patreon-dl', DEFAULT_INVENTORY_FILENAME);
         if (inventoryResume) {
           const recoveredTrailingRecord = recoverTrailingInventoryRecord(outputPath);
           resumeState = readInventoryResumeState(outputPath);
@@ -272,6 +308,282 @@ export async function inventoryPosts(options: {
   }
 
   return { hasError };
+}
+
+async function inventoryDeltaPosts(options: {
+  onOptionError: (error: unknown) => Promise<void>;
+}): Promise<InventoryPostsResult> {
+  let inventoryOut: string | undefined;
+  let inventoryIn: string | undefined;
+  let inventoryLimit: number | undefined;
+  try {
+    inventoryOut = CommandLineParser.inventoryOut();
+    inventoryIn = CommandLineParser.inventoryIn();
+    inventoryLimit = parseInventoryLimit(CommandLineParser.inventoryLimit());
+    if (CommandLineParser.inventoryResume()) {
+      throw Error("'--inventory-resume' cannot be used with '--inventory-delta'");
+    }
+  }
+  catch (error) {
+    await options.onOptionError(error);
+    return { hasError: true };
+  }
+
+  let cliOptions;
+  try {
+    cliOptions = getCLIOptions();
+  }
+  catch (error) {
+    await options.onOptionError(error);
+    return { hasError: true };
+  }
+
+  const consoleLogger = new ConsoleLogger(cliOptions.consoleLogger);
+  const warnLogger = new ConsoleLogger({ logLevel: 'warn' });
+  const abortController = new AbortController();
+  const abortHandler = () => {
+    console.log('Abort');
+    abortController.abort();
+  };
+  process.on('SIGINT', abortHandler);
+
+  let hasError = false;
+  let output: fs.WriteStream | null = null;
+  let outputPath: string | null = null;
+  let baseInventoryPath: string | null = null;
+  let baseState: InventoryBaseState | null = null;
+  let newPosts = 0;
+  let updatedPosts = 0;
+  let skippedExistingPosts = 0;
+  let deltaPosts = 0;
+  let hitLimit = false;
+  let stopReason = 'end';
+  const startedAt = new Date().toISOString();
+
+  try {
+    for (const target of cliOptions.targetURLs) {
+      const downloader = await Downloader.getInstance(target.url, {
+        ...cliOptions,
+        include: {
+          ...cliOptions.include,
+          ...(target.include || {})
+        }
+      });
+      const PostDownloader = (await import('../../downloaders/PostDownloader.js')).default;
+      if (!(downloader instanceof PostDownloader)) {
+        throw Error('Inventory delta mode supports post targets only');
+      }
+
+      const config = downloader.getConfig(false);
+      if (!output) {
+        baseInventoryPath = path.resolve(inventoryIn || path.join(config.outDir, '.patreon-dl', DEFAULT_INVENTORY_FILENAME));
+        baseState = readInventoryBaseState(baseInventoryPath);
+        outputPath = path.resolve(inventoryOut || path.join(config.outDir, '.patreon-dl', DEFAULT_DELTA_INVENTORY_FILENAME));
+        output = openInventoryOutput(outputPath, false);
+        await writeJSONL(output, {
+          type: 'inventoryRun',
+          schemaVersion: 1,
+          delta: true,
+          startedAt,
+          limit: inventoryLimit || null,
+          baseInventory: baseInventoryPath,
+          basePosts: baseState.postKeys.size,
+          targets: cliOptions.targetURLs.map((t) => t.url)
+        });
+        commonLog(consoleLogger, 'info', null, `Inventory delta base: ${baseState.postKeys.size} posts from "${baseInventoryPath}"`);
+      }
+
+      if (!baseState || !output) {
+        throw Error('Inventory delta output was not initialized');
+      }
+      if (inventoryLimit && deltaPosts >= inventoryLimit) {
+        hitLimit = true;
+        stopReason = 'limit';
+        commonLog(consoleLogger, 'info', null, `Inventory delta limit already satisfied: ${deltaPosts} records`);
+        break;
+      }
+
+      const postsFetcher = new PostsFetcher({
+        config,
+        fetcher: downloader.getFetcher(),
+        logger: warnLogger,
+        signal: abortController.signal
+      });
+
+      commonLog(consoleLogger, 'info', null, `Inventory delta target: ${target.url}`);
+      postsFetcher.begin();
+      let pageCount = 0;
+      let targetNewPosts = 0;
+      let targetUpdatedPosts = 0;
+      let targetSkippedExistingPosts = 0;
+      let targetStopReason = 'end';
+      while (postsFetcher.hasNext()) {
+        const { list, aborted, error } = await postsFetcher.next();
+        if (aborted || abortController.signal.aborted) {
+          targetStopReason = 'abort';
+          break;
+        }
+        if (!list) {
+          if (error) {
+            commonLog(consoleLogger, 'error', null, 'Error fetching inventory delta:', error);
+            hasError = true;
+            targetStopReason = 'error';
+            stopReason = 'error';
+          }
+          break;
+        }
+        pageCount++;
+        let pageHadKnownPost = false;
+        for (const post of list.items) {
+          if (inventoryLimit && deltaPosts >= inventoryLimit) {
+            hitLimit = true;
+            targetStopReason = 'limit';
+            stopReason = 'limit';
+            break;
+          }
+          const postKey = getPostCheckpointKey(post);
+          const existingPost = postKey ? baseState.postsByKey.get(postKey) : null;
+          if (existingPost) {
+            pageHadKnownPost = true;
+            targetSkippedExistingPosts++;
+            skippedExistingPosts++;
+            if (isPostNewerThanInventoryRecord(post, existingPost)) {
+              await writeJSONL(output, createPostInventoryRecord(post, target.url));
+              targetUpdatedPosts++;
+              updatedPosts++;
+              deltaPosts++;
+            }
+            continue;
+          }
+
+          await writeJSONL(output, createPostInventoryRecord(post, target.url));
+          targetNewPosts++;
+          newPosts++;
+          deltaPosts++;
+        }
+
+        await writeJSONL(output, {
+          type: 'inventoryCheckpoint',
+          schemaVersion: 1,
+          delta: true,
+          targetURL: target.url,
+          checkpointedAt: new Date().toISOString(),
+          pageCount,
+          deltaPosts,
+          newPosts,
+          updatedPosts,
+          skippedExistingPosts,
+          nextURL: list.nextURL,
+          complete: !list.nextURL || pageHadKnownPost || hitLimit,
+          stopReason: pageHadKnownPost ? 'known-post' : targetStopReason
+        });
+
+        commonLog(consoleLogger, 'info', null, `Inventory delta page ${pageCount}: ${targetNewPosts} new, ${targetUpdatedPosts} updated, ${targetSkippedExistingPosts} known`);
+        if (hitLimit) {
+          commonLog(consoleLogger, 'info', null, `Inventory delta limit reached: ${deltaPosts} records`);
+          break;
+        }
+        if (pageHadKnownPost) {
+          targetStopReason = 'known-post';
+          stopReason = stopReason === 'end' ? 'known-post' : stopReason;
+          break;
+        }
+        if (postsFetcher.hasNext() && config.request.pageDelay > 0) {
+          commonLog(consoleLogger, 'info', null, `Waiting ${config.request.pageDelay / 1000} seconds before next inventory page`);
+          await Sleeper.getInstance(config.request.pageDelay, abortController.signal).start();
+        }
+      }
+      commonLog(consoleLogger, 'info', null, `Inventory delta target complete: ${targetNewPosts} new posts, ${targetUpdatedPosts} updated posts, ${targetSkippedExistingPosts} known posts across ${pageCount} pages`);
+      if (hitLimit) {
+        break;
+      }
+    }
+  }
+  catch (error) {
+    if (!abortController.signal.aborted) {
+      commonLog(consoleLogger, 'error', null, 'Inventory delta error:', error);
+      hasError = true;
+      stopReason = 'error';
+    }
+  }
+  finally {
+    if (output) {
+      const inventoryOutput = output;
+      await writeJSONL(inventoryOutput, {
+        type: 'inventorySummary',
+        schemaVersion: 1,
+        delta: true,
+        startedAt,
+        completedAt: new Date().toISOString(),
+        aborted: abortController.signal.aborted && !hitLimit,
+        limited: hitLimit,
+        limit: inventoryLimit || null,
+        baseInventory: baseInventoryPath,
+        basePosts: baseState?.postKeys.size || 0,
+        deltaPosts,
+        newPosts,
+        updatedPosts,
+        skippedExistingPosts,
+        stopReason: abortController.signal.aborted && !hitLimit ? 'abort' : stopReason
+      });
+      await new Promise<void>((resolve) => inventoryOutput.end(resolve));
+      if (outputPath) {
+        commonLog(consoleLogger, 'info', null, `Inventory delta written to "${outputPath}"`);
+      }
+    }
+    process.off('SIGINT', abortHandler);
+  }
+
+  return { hasError };
+}
+
+function readInventoryBaseState(file: string): InventoryBaseState {
+  if (!fs.existsSync(file)) {
+    throw Error(`Inventory input not found: "${file}"`);
+  }
+  const state: InventoryBaseState = {
+    postKeys: new Set(),
+    postsByKey: new Map()
+  };
+  const lines = fs.readFileSync(file, 'utf-8').replace(/\r\n/g, '\n').split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) {
+      continue;
+    }
+    let record: InventoryPostRecord;
+    try {
+      record = JSON.parse(line);
+    }
+    catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw Error(`Failed to parse inventory JSONL line ${i + 1}: ${message}`);
+    }
+    if (record.type !== 'post') {
+      continue;
+    }
+    const postKey = getInventoryRecordCheckpointKey(record);
+    if (!postKey) {
+      continue;
+    }
+    state.postKeys.add(postKey);
+    state.postsByKey.set(postKey, record);
+  }
+  return state;
+}
+
+function isPostNewerThanInventoryRecord(post: Post, record: InventoryPostRecord) {
+  const postTimestamp = parseDateValue(post.editedAt) ?? parseDateValue(post.publishedAt);
+  const recordTimestamp = parseDateValue(record.editedAt) ?? parseDateValue(record.publishedAt);
+  return postTimestamp !== null && recordTimestamp !== null && postTimestamp > recordTimestamp;
+}
+
+function parseDateValue(value?: string | null) {
+  if (!value) {
+    return null;
+  }
+  const timestamp = Date.parse(value);
+  return Number.isNaN(timestamp) ? null : timestamp;
 }
 
 function parseInventoryLimit(value?: number) {

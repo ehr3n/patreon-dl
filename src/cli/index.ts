@@ -26,6 +26,7 @@ import { type Product } from '../entities/Product.js';
 import { type Post } from '../entities/Post.js';
 import { listPosts } from './helper/PostList.js';
 import { inventoryPosts } from './helper/PostInventory.js';
+import { mergeInventory } from './helper/InventoryMerge.js';
 import { reportInventory } from './helper/InventoryReport.js';
 import { selectInventoryTargets } from './helper/InventorySelect.js';
 
@@ -80,6 +81,10 @@ export default class PatreonDownloaderCLI {
     }
 
     if (await this.#inventoryPosts()) {
+      return;
+    }
+
+    if (await this.#mergeInventory()) {
       return;
     }
 
@@ -213,6 +218,17 @@ export default class PatreonDownloaderCLI {
 
   async #inventoryPosts(): Promise<boolean> {
     const result = await inventoryPosts({
+      onOptionError: (error) => this.#printOptionError(error)
+    });
+    if (!result) {
+      return false;
+    }
+    await this.exit(result.hasError ? 1 : 0);
+    return true;
+  }
+
+  async #mergeInventory(): Promise<boolean> {
+    const result = await mergeInventory({
       onOptionError: (error) => this.#printOptionError(error)
     });
     if (!result) {

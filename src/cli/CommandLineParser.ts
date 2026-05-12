@@ -29,12 +29,15 @@ const COMMAND_LINE_ARGS = {
   listPosts: 'list-posts',
   listPostsByUserId: 'list-posts-uid',
   inventory: 'inventory',
+  inventoryDelta: 'inventory-delta',
+  inventoryMerge: 'inventory-merge',
   inventoryOut: 'inventory-out',
   inventoryLimit: 'inventory-limit',
   inventoryResume: 'inventory-resume',
   inventoryReport: 'inventory-report',
   inventorySelect: 'inventory-select',
   inventoryIn: 'inventory-in',
+  deltaIn: 'delta-in',
   targetIn: 'target-in',
   targetOut: 'target-out',
   selectMedia: 'select-media',
@@ -144,8 +147,18 @@ const OPT_DEFS = [
     type: Boolean
   },
   {
+    name: COMMAND_LINE_ARGS.inventoryDelta,
+    description: 'Fetch newest post metadata until known posts from --inventory-in are reached, writing only new or updated records.',
+    type: Boolean
+  },
+  {
+    name: COMMAND_LINE_ARGS.inventoryMerge,
+    description: 'Merge a base inventory JSONL and delta JSONL into a canonical current inventory.',
+    type: Boolean
+  },
+  {
     name: COMMAND_LINE_ARGS.inventoryOut,
-    description: 'Path to write inventory JSONL. Defaults to <out.dir>/.patreon-dl/inventory.jsonl.',
+    description: 'Path to write inventory JSONL. Defaults depend on inventory mode.',
     type: String,
     typeLabel: '<file>'
   },
@@ -173,6 +186,12 @@ const OPT_DEFS = [
   {
     name: COMMAND_LINE_ARGS.inventoryIn,
     description: 'Path to read inventory JSONL. Defaults to <out.dir>/.patreon-dl/inventory.jsonl.',
+    type: String,
+    typeLabel: '<file>'
+  },
+  {
+    name: COMMAND_LINE_ARGS.deltaIn,
+    description: 'Path to read delta inventory JSONL for --inventory-merge. Defaults to <out.dir>/.patreon-dl/inventory-delta.jsonl.',
     type: String,
     typeLabel: '<file>'
   },
@@ -244,6 +263,8 @@ export default class CommandLineParser {
         COMMAND_LINE_ARGS.dryRun,
         COMMAND_LINE_ARGS.force,
         COMMAND_LINE_ARGS.inventory,
+        COMMAND_LINE_ARGS.inventoryDelta,
+        COMMAND_LINE_ARGS.inventoryMerge,
         COMMAND_LINE_ARGS.inventoryResume,
         COMMAND_LINE_ARGS.inventoryReport,
         COMMAND_LINE_ARGS.inventorySelect,
@@ -472,6 +493,28 @@ export default class CommandLineParser {
     return !!opts[COMMAND_LINE_ARGS.inventory];
   }
 
+  static inventoryDelta() {
+    let opts: commandLineArgs.CommandLineOptions;
+    try {
+      opts = this.#parseArgs();
+    }
+    catch (_error: unknown) {
+      return false;
+    }
+    return !!opts[COMMAND_LINE_ARGS.inventoryDelta];
+  }
+
+  static inventoryMerge() {
+    let opts: commandLineArgs.CommandLineOptions;
+    try {
+      opts = this.#parseArgs();
+    }
+    catch (_error: unknown) {
+      return false;
+    }
+    return !!opts[COMMAND_LINE_ARGS.inventoryMerge];
+  }
+
   static inventoryOut() {
     return this.#getStringOption(COMMAND_LINE_ARGS.inventoryOut);
   }
@@ -515,6 +558,10 @@ export default class CommandLineParser {
 
   static inventoryIn() {
     return this.#getStringOption(COMMAND_LINE_ARGS.inventoryIn);
+  }
+
+  static deltaIn() {
+    return this.#getStringOption(COMMAND_LINE_ARGS.deltaIn);
   }
 
   static targetIn() {

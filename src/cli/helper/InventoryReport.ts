@@ -20,6 +20,12 @@ type InventoryRunRecord = {
   targets?: string[];
   resumed?: boolean;
   existingPosts?: number;
+  delta?: boolean;
+  merge?: boolean;
+  baseInventory?: string | null;
+  deltaInventory?: string | null;
+  basePosts?: number;
+  deltaPosts?: number;
 };
 
 type InventorySummaryRecord = {
@@ -29,10 +35,17 @@ type InventorySummaryRecord = {
   limited?: boolean;
   limit?: number | null;
   totalPosts?: number;
+  basePosts?: number;
+  deltaPosts?: number;
   existingPosts?: number;
   newPosts?: number;
+  updatedPosts?: number;
+  unchangedDeltaPosts?: number;
   skippedExistingPosts?: number;
   resumed?: boolean;
+  delta?: boolean;
+  merge?: boolean;
+  stopReason?: string;
 };
 
 type InventoryRecords = {
@@ -157,6 +170,12 @@ function printReport(args: {
   if (latestSummary?.completedAt) {
     console.log(`Completed: ${latestSummary.completedAt}`);
   }
+  if (latestRun?.delta || latestSummary?.delta) {
+    console.log('Mode: delta');
+  }
+  if (latestRun?.merge || latestSummary?.merge) {
+    console.log('Mode: merge');
+  }
   console.log(`Posts: ${records.posts.length}`);
   if (latestRun?.resumed) {
     console.log(`Resume: existingPosts=${latestRun.existingPosts || 0}`);
@@ -170,8 +189,23 @@ function printReport(args: {
     if (latestSummary.newPosts !== undefined) {
       summary.push(`newPosts=${latestSummary.newPosts}`);
     }
+    if (latestSummary.updatedPosts !== undefined) {
+      summary.push(`updatedPosts=${latestSummary.updatedPosts}`);
+    }
+    if (latestSummary.deltaPosts !== undefined) {
+      summary.push(`deltaPosts=${latestSummary.deltaPosts}`);
+    }
+    if (latestSummary.basePosts !== undefined) {
+      summary.push(`basePosts=${latestSummary.basePosts}`);
+    }
     if (latestSummary.skippedExistingPosts !== undefined) {
       summary.push(`skippedExistingPosts=${latestSummary.skippedExistingPosts}`);
+    }
+    if (latestSummary.unchangedDeltaPosts !== undefined) {
+      summary.push(`unchangedDeltaPosts=${latestSummary.unchangedDeltaPosts}`);
+    }
+    if (latestSummary.stopReason) {
+      summary.push(`stopReason=${latestSummary.stopReason}`);
     }
     console.log(`Summary: ${summary.join('; ')}`);
   }

@@ -24,10 +24,13 @@ export type InventoryMedia = {
 
 export type InventoryPostRecord = {
   type?: string;
+  schemaVersion?: number;
   id?: string | null;
   url?: string | null;
+  targetURL?: string | null;
   title?: string | null;
   publishedAt?: string | null;
+  editedAt?: string | null;
   tags?: InventoryTag[];
   media?: InventoryMedia[];
 };
