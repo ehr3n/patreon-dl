@@ -10,6 +10,7 @@ import {
   type ContentMediaType,
   type InventoryPostRecord
 } from './InventorySelect.js';
+import { toArchiveStatePath, updateArchiveState, writeJSONAtomic } from './ArchiveState.js';
 
 export type HarvestReportResult = false | {
   hasError: boolean;
@@ -51,6 +52,56 @@ type HarvestDBState = {
   totalMedia: number;
 };
 
+type HarvestReportPost = {
+  id?: string | null;
+  url?: string | null;
+  title?: string | null;
+  publishedAt?: string | null;
+};
+
+type HarvestReportData = {
+  schemaVersion: 1;
+  generatedAt: string;
+  paths: {
+    outDir: string;
+    inventory: string;
+    targets: string;
+    database: string;
+    reportJSON: string | null;
+  };
+  statusCaches: {
+    files: string[];
+    postEntries: number;
+  };
+  targets: {
+    targetURLs: number;
+    uniqueTargetURLs: number;
+    matchedInventoryPosts: number;
+    missingFromInventory: number;
+    downloadedPosts: number;
+    failedPosts: number;
+    pendingPosts: number;
+  };
+  database: {
+    exists: boolean;
+    postRows: number;
+    postRowsOutsideSelectedTargets: number;
+    mediaRows: number;
+    selectedMediaRows: number;
+    selectedMediaFilesPresent: number;
+    selectedMediaFilesMissing: number;
+  };
+  expectedTargetAssets: Record<string, number>;
+  downloadedTargetMedia: Record<string, number>;
+  lists: {
+    failedTargetPosts: HarvestReportPost[];
+    pendingTargetPosts: HarvestReportPost[];
+    targetURLsMissingFromInventory: string[];
+    statusCacheEntriesWithLastErrors: string[];
+    missingLocalMediaFiles: string[];
+  };
+};
+
 const DEFAULT_INVENTORY_FILENAME = 'inventory.jsonl';
 const DEFAULT_CURRENT_INVENTORY_FILENAME = 'inventory-current.jsonl';
 const DEFAULT_TARGETS_FILENAME = 'targets.txt';
@@ -82,10 +133,12 @@ export async function harvestReport(options: {
   let inventoryInValue: string | undefined;
   let targetInValue: string | undefined;
   let dbInValue: string | undefined;
+  let harvestReportOutValue: string | undefined;
   try {
     inventoryInValue = CommandLineParser.inventoryIn();
     targetInValue = CommandLineParser.targetIn();
     dbInValue = CommandLineParser.dbIn();
+    harvestReportOutValue = CommandLineParser.harvestReportOut();
   }
   catch (error) {
     await options.onOptionError(error);
@@ -97,21 +150,54 @@ export async function harvestReport(options: {
   const inventoryIn = path.resolve(inventoryInValue || getDefaultInventoryPath(stateDir));
   const targetIn = path.resolve(targetInValue || path.join(stateDir, DEFAULT_TARGETS_FILENAME));
   const dbIn = path.resolve(dbInValue || path.join(stateDir, DEFAULT_DB_FILENAME));
+  const harvestReportOut = harvestReportOutValue ? path.resolve(harvestReportOutValue) : null;
 
   try {
     const inventoryPosts = readInventoryPosts(inventoryIn);
     const targetURLs = readTargetURLs(targetIn);
     const dbState = readHarvestDB(dbIn);
     const statusCache = readStatusCaches(outDir);
-    printHarvestReport({
+    const report = createHarvestReport({
       outDir,
       inventoryIn,
       targetIn,
       dbIn,
+      harvestReportOut,
       inventoryPosts,
       targetURLs,
       dbState,
       statusCache
+    });
+    printHarvestReport(report);
+    if (harvestReportOut) {
+      writeJSONAtomic(harvestReportOut, report);
+      console.log(`\nHarvest report JSON written to "${harvestReportOut}"`);
+    }
+    updateArchiveState(outDir, (state) => {
+      state.harvest = {
+        ...state.harvest,
+        lastReport: {
+          path: harvestReportOut ? toArchiveStatePath(outDir, harvestReportOut) : null,
+          generatedAt: report.generatedAt,
+          inventory: toArchiveStatePath(outDir, inventoryIn) || inventoryIn,
+          targets: toArchiveStatePath(outDir, targetIn) || targetIn,
+          database: toArchiveStatePath(outDir, dbIn) || dbIn,
+          counts: {
+            targetURLs: report.targets.targetURLs,
+            uniqueTargetURLs: report.targets.uniqueTargetURLs,
+            matchedInventoryPosts: report.targets.matchedInventoryPosts,
+            missingFromInventory: report.targets.missingFromInventory,
+            downloadedPosts: report.targets.downloadedPosts,
+            failedPosts: report.targets.failedPosts,
+            pendingPosts: report.targets.pendingPosts,
+            dbExists: report.database.exists,
+            dbPostRows: report.database.postRows,
+            dbMediaRows: report.database.mediaRows,
+            selectedMediaFilesPresent: report.database.selectedMediaFilesPresent,
+            selectedMediaFilesMissing: report.database.selectedMediaFilesMissing
+          }
+        }
+      };
     });
   }
   catch (error) {
@@ -228,16 +314,17 @@ function findStatusCacheFiles(root: string) {
   return result.sort();
 }
 
-function printHarvestReport(args: {
+function createHarvestReport(args: {
   outDir: string;
   inventoryIn: string;
   targetIn: string;
   dbIn: string;
+  harvestReportOut: string | null;
   inventoryPosts: InventoryPostRecord[];
   targetURLs: string[];
   dbState: HarvestDBState;
   statusCache: StatusCacheState;
-}) {
+}): HarvestReportData {
   const uniqueTargetURLs = Array.from(new Set(args.targetURLs));
   const inventoryByURL = new Map(args.inventoryPosts.filter((post) => !!post.url).map((post) => [ post.url as string, post ]));
   const targetPosts = uniqueTargetURLs
@@ -291,38 +378,83 @@ function printHarvestReport(args: {
   const dbPostsOutsideTargets = Array.from(args.dbState.postsByID.keys()).filter((postID) => !targetPostIDs.has(postID));
   const erroredCacheEntries = Array.from(args.statusCache.postsByID.entries()).filter(([, entry]) => !!entry.lastDownloadHasErrors);
 
+  return {
+    schemaVersion: 1,
+    generatedAt: new Date().toISOString(),
+    paths: {
+      outDir: args.outDir,
+      inventory: args.inventoryIn,
+      targets: args.targetIn,
+      database: args.dbIn,
+      reportJSON: args.harvestReportOut
+    },
+    statusCaches: {
+      files: args.statusCache.files,
+      postEntries: args.statusCache.postsByID.size
+    },
+    targets: {
+      targetURLs: args.targetURLs.length,
+      uniqueTargetURLs: uniqueTargetURLs.length,
+      matchedInventoryPosts: targetPosts.length,
+      missingFromInventory: missingInventoryURLs.length,
+      downloadedPosts: downloadedTargets.length,
+      failedPosts: failedTargets.length,
+      pendingPosts: pendingTargets.length
+    },
+    database: {
+      exists: args.dbState.exists,
+      postRows: args.dbState.totalPosts,
+      postRowsOutsideSelectedTargets: dbPostsOutsideTargets.length,
+      mediaRows: args.dbState.totalMedia,
+      selectedMediaRows: selectedDBMedia,
+      selectedMediaFilesPresent,
+      selectedMediaFilesMissing: missingLocalFiles.length
+    },
+    expectedTargetAssets: mapToRecord(expectedMediaCounts),
+    downloadedTargetMedia: mapToRecord(downloadedMediaCounts),
+    lists: {
+      failedTargetPosts: failedTargets.map(summarizePost),
+      pendingTargetPosts: pendingTargets.map(summarizePost),
+      targetURLsMissingFromInventory: missingInventoryURLs,
+      statusCacheEntriesWithLastErrors: erroredCacheEntries.map(([ postID ]) => postID),
+      missingLocalMediaFiles: missingLocalFiles.map(({ file }) => file)
+    }
+  };
+}
+
+function printHarvestReport(report: HarvestReportData) {
   printHeading('Harvest Report');
-  console.log(`Inventory: ${args.inventoryIn}`);
-  console.log(`Targets: ${args.targetIn}`);
-  console.log(`Database: ${args.dbIn}${args.dbState.exists ? '' : ' (missing)'}`);
-  console.log(`Status caches: ${args.statusCache.files.length} files, ${args.statusCache.postsByID.size} post entries`);
-  console.log(`Output directory: ${args.outDir}`);
+  console.log(`Inventory: ${report.paths.inventory}`);
+  console.log(`Targets: ${report.paths.targets}`);
+  console.log(`Database: ${report.paths.database}${report.database.exists ? '' : ' (missing)'}`);
+  console.log(`Status caches: ${report.statusCaches.files.length} files, ${report.statusCaches.postEntries} post entries`);
+  console.log(`Output directory: ${report.paths.outDir}`);
 
   printHeading('Target Coverage');
-  console.log(`Target URLs: ${args.targetURLs.length}`);
-  console.log(`Unique target URLs: ${uniqueTargetURLs.length}`);
-  console.log(`Matched inventory posts: ${targetPosts.length}`);
-  console.log(`Missing from inventory: ${missingInventoryURLs.length}`);
-  console.log(`Downloaded target posts: ${downloadedTargets.length}`);
-  console.log(`Failed target posts: ${failedTargets.length}`);
-  console.log(`Pending target posts: ${pendingTargets.length}`);
+  console.log(`Target URLs: ${report.targets.targetURLs}`);
+  console.log(`Unique target URLs: ${report.targets.uniqueTargetURLs}`);
+  console.log(`Matched inventory posts: ${report.targets.matchedInventoryPosts}`);
+  console.log(`Missing from inventory: ${report.targets.missingFromInventory}`);
+  console.log(`Downloaded target posts: ${report.targets.downloadedPosts}`);
+  console.log(`Failed target posts: ${report.targets.failedPosts}`);
+  console.log(`Pending target posts: ${report.targets.pendingPosts}`);
 
   printHeading('Database Coverage');
-  console.log(`DB post rows: ${args.dbState.totalPosts}`);
-  console.log(`DB post rows outside selected targets: ${dbPostsOutsideTargets.length}`);
-  console.log(`DB media rows: ${args.dbState.totalMedia}`);
-  console.log(`Selected DB media rows: ${selectedDBMedia}`);
-  console.log(`Selected media files present: ${selectedMediaFilesPresent}`);
-  console.log(`Selected media files missing: ${missingLocalFiles.length}`);
+  console.log(`DB post rows: ${report.database.postRows}`);
+  console.log(`DB post rows outside selected targets: ${report.database.postRowsOutsideSelectedTargets}`);
+  console.log(`DB media rows: ${report.database.mediaRows}`);
+  console.log(`Selected DB media rows: ${report.database.selectedMediaRows}`);
+  console.log(`Selected media files present: ${report.database.selectedMediaFilesPresent}`);
+  console.log(`Selected media files missing: ${report.database.selectedMediaFilesMissing}`);
 
-  printCounts('Expected target assets from inventory', expectedMediaCounts, CONTENT_MEDIA_TYPES);
-  printCounts('Downloaded target media from DB', downloadedMediaCounts);
+  printCounts('Expected target assets from inventory', recordToMap(report.expectedTargetAssets), CONTENT_MEDIA_TYPES);
+  printCounts('Downloaded target media from DB', recordToMap(report.downloadedTargetMedia));
 
-  printPostList('Failed target posts', failedTargets);
-  printPostList('Pending target posts', pendingTargets);
-  printStringList('Target URLs missing from inventory', missingInventoryURLs);
-  printStringList('Status-cache entries with last errors', erroredCacheEntries.map(([ postID ]) => postID));
-  printStringList('Missing local media files', missingLocalFiles.map(({ file }) => file));
+  printPostList('Failed target posts', report.lists.failedTargetPosts);
+  printPostList('Pending target posts', report.lists.pendingTargetPosts);
+  printStringList('Target URLs missing from inventory', report.lists.targetURLsMissingFromInventory);
+  printStringList('Status-cache entries with last errors', report.lists.statusCacheEntriesWithLastErrors);
+  printStringList('Missing local media files', report.lists.missingLocalMediaFiles);
 }
 
 function getExpectedMediaCounts(posts: InventoryPostRecord[]) {
@@ -336,6 +468,23 @@ function getExpectedMediaCounts(posts: InventoryPostRecord[]) {
     }
   }
   return counts;
+}
+
+function summarizePost(post: InventoryPostRecord): HarvestReportPost {
+  return {
+    id: post.id,
+    url: post.url,
+    title: post.title,
+    publishedAt: post.publishedAt
+  };
+}
+
+function mapToRecord(counts: Map<string, number>) {
+  return Object.fromEntries(sortCounts(counts));
+}
+
+function recordToMap(record: Record<string, number>) {
+  return new Map(Object.entries(record));
 }
 
 function getPostIDFromURL(url?: string | null) {
@@ -365,7 +514,7 @@ function printCounts(title: string, counts: Map<string, number>, keys?: string[]
   }
 }
 
-function printPostList(title: string, posts: InventoryPostRecord[]) {
+function printPostList(title: string, posts: HarvestReportPost[]) {
   printHeading(title);
   if (posts.length === 0) {
     console.log('(none)');

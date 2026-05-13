@@ -39,6 +39,7 @@ const COMMAND_LINE_ARGS = {
   inventoryIn: 'inventory-in',
   deltaIn: 'delta-in',
   harvestReport: 'harvest-report',
+  harvestReportOut: 'harvest-report-out',
   dbIn: 'db-in',
   targetIn: 'target-in',
   targetOut: 'target-out',
@@ -189,6 +190,12 @@ const OPT_DEFS = [
     name: COMMAND_LINE_ARGS.harvestReport,
     description: 'Read inventory, targets, database, and status cache to report harvest coverage.',
     type: Boolean
+  },
+  {
+    name: COMMAND_LINE_ARGS.harvestReportOut,
+    description: 'Path to write harvest coverage report JSON.',
+    type: String,
+    typeLabel: '<file>'
   },
   {
     name: COMMAND_LINE_ARGS.inventoryIn,
@@ -579,6 +586,10 @@ export default class CommandLineParser {
       return false;
     }
     return !!opts[COMMAND_LINE_ARGS.harvestReport];
+  }
+
+  static harvestReportOut() {
+    return this.#getStringOption(COMMAND_LINE_ARGS.harvestReportOut);
   }
 
   static inventoryIn() {

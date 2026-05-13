@@ -51,4 +51,14 @@ Use the harvest report to compare targets against inventory, the SQLite database
 node bin/patreon-dl.js -C creator.local.conf --harvest-report --inventory-in ./downloads/creator/.patreon-dl/inventory-current.jsonl --target-in ./downloads/creator/.patreon-dl/audio-targets.txt
 ```
 
+Write machine-readable JSON for Obsidian or automation with:
+
+```sh
+node bin/patreon-dl.js -C creator.local.conf --harvest-report --inventory-in ./downloads/creator/.patreon-dl/inventory-current.jsonl --target-in ./downloads/creator/.patreon-dl/audio-targets.txt --harvest-report-out ./downloads/creator/.patreon-dl/harvest-report.json
+```
+
+## Archive State
+
+Inventory, delta, target selection, and harvest-report commands update `./downloads/creator/.patreon-dl/archive-state.json`. This file is local state, not source code. It records current inventory paths, last delta scan counts, selected target files, and the last harvest report summary without cookies or signed media URLs.
+
 Never delete downloaded media automatically based on upstream removals. Treat missing or edited upstream assets as archive metadata, not cleanup instructions.

@@ -4,6 +4,7 @@ import ConsoleLogger from '../../utils/logging/ConsoleLogger.js';
 import { commonLog } from '../../utils/logging/Logger.js';
 import { getCLIOptions } from '../CLIOptions.js';
 import CommandLineParser from '../CommandLineParser.js';
+import { toArchiveStatePath, updateArchiveState } from './ArchiveState.js';
 
 export type InventorySelectResult = false | {
   hasError: boolean;
@@ -92,6 +93,26 @@ export async function selectInventoryTargets(options: {
       mediaTypes,
       tags,
       posts: selected
+    });
+    const generatedAt = new Date().toISOString();
+    const selection = {
+      path: toArchiveStatePath(outDir, targetOut) || targetOut,
+      sourceInventory: toArchiveStatePath(outDir, inventoryIn) || inventoryIn,
+      generatedAt,
+      selectedPosts: selected.length,
+      mediaTypes,
+      tags,
+      limit: limit || null
+    };
+    updateArchiveState(outDir, (state) => {
+      state.targets = {
+        ...state.targets,
+        lastSelection: selection,
+        files: {
+          ...(state.targets?.files || {}),
+          [selection.path]: selection
+        }
+      };
     });
 
     commonLog(consoleLogger, 'info', null, `Inventory posts read: ${posts.length}`);

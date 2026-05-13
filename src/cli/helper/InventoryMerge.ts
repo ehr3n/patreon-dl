@@ -5,6 +5,7 @@ import { commonLog } from '../../utils/logging/Logger.js';
 import { getCLIOptions } from '../CLIOptions.js';
 import CommandLineParser from '../CommandLineParser.js';
 import { readInventoryPosts, type InventoryPostRecord } from './InventorySelect.js';
+import { toArchiveStatePath, updateArchiveState } from './ArchiveState.js';
 
 export type InventoryMergeResult = false | {
   hasError: boolean;
@@ -74,6 +75,20 @@ export async function mergeInventory(options: {
       deltaIn,
       stats,
       posts
+    });
+    updateArchiveState(outDir, (state) => {
+      state.inventory = {
+        ...state.inventory,
+        current: {
+          path: toArchiveStatePath(outDir, inventoryOut) || inventoryOut,
+          updatedAt: new Date().toISOString(),
+          totalPosts: stats.totalPosts,
+          baseInventory: toArchiveStatePath(outDir, inventoryIn),
+          deltaInventory: toArchiveStatePath(outDir, deltaIn),
+          newPosts: stats.newPosts,
+          updatedPosts: stats.updatedPosts
+        }
+      };
     });
 
     commonLog(consoleLogger, 'info', null, `Base inventory posts: ${stats.basePosts}`);

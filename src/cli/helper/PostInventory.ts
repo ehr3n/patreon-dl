@@ -12,6 +12,7 @@ import type { MediaItem } from '../../entities/MediaItem.js';
 import type { Collection, Post, PostEmbed } from '../../entities/Post.js';
 import Sleeper from '../../utils/Sleeper.js';
 import type { InventoryPostRecord } from './InventorySelect.js';
+import { toArchiveStatePath, updateArchiveState } from './ArchiveState.js';
 
 export type InventoryPostsResult = false | {
   hasError: boolean;
@@ -121,6 +122,7 @@ async function inventoryAllPosts(options: {
   let hasError = false;
   let output: fs.WriteStream | null = null;
   let outputPath: string | null = null;
+  let stateOutDir: string | null = null;
   let resumeState: InventoryResumeState | null = null;
   let initialExistingPosts = 0;
   let totalPosts = 0;
@@ -146,6 +148,7 @@ async function inventoryAllPosts(options: {
       const config = downloader.getConfig(false);
       if (!output) {
         outputPath = inventoryOut || path.resolve(config.outDir, '.patreon-dl', DEFAULT_INVENTORY_FILENAME);
+        stateOutDir = config.outDir;
         if (inventoryResume) {
           const recoveredTrailingRecord = recoverTrailingInventoryRecord(outputPath);
           resumeState = readInventoryResumeState(outputPath);
@@ -285,11 +288,12 @@ async function inventoryAllPosts(options: {
   finally {
     if (output) {
       const inventoryOutput = output;
-      await writeJSONL(inventoryOutput, {
+      const completedAt = new Date().toISOString();
+      const summary = {
         type: 'inventorySummary',
         schemaVersion: 1,
         startedAt,
-        completedAt: new Date().toISOString(),
+        completedAt,
         aborted: abortController.signal.aborted && !hitLimit,
         limited: hitLimit,
         limit: inventoryLimit || null,
@@ -298,10 +302,31 @@ async function inventoryAllPosts(options: {
         newPosts,
         skippedExistingPosts,
         resumed: inventoryResume
-      });
+      };
+      await writeJSONL(inventoryOutput, summary);
       await new Promise<void>((resolve) => inventoryOutput.end(resolve));
       if (outputPath) {
         commonLog(consoleLogger, 'info', null, `Inventory written to "${outputPath}"`);
+      }
+      if (outputPath && stateOutDir) {
+        const archiveOutDir = stateOutDir;
+        const archiveOutputPath = outputPath;
+        updateArchiveState(stateOutDir, (state) => {
+          state.inventory = {
+            ...state.inventory,
+            lastFull: {
+              path: toArchiveStatePath(archiveOutDir, archiveOutputPath) || archiveOutputPath,
+              startedAt,
+              completedAt,
+              totalPosts,
+              newPosts,
+              skippedExistingPosts,
+              aborted: summary.aborted,
+              limited: hitLimit,
+              limit: inventoryLimit || null
+            }
+          };
+        });
       }
     }
     process.off('SIGINT', abortHandler);
@@ -350,6 +375,7 @@ async function inventoryDeltaPosts(options: {
   let hasError = false;
   let output: fs.WriteStream | null = null;
   let outputPath: string | null = null;
+  let stateOutDir: string | null = null;
   let baseInventoryPath: string | null = null;
   let baseState: InventoryBaseState | null = null;
   let newPosts = 0;
@@ -379,6 +405,7 @@ async function inventoryDeltaPosts(options: {
         baseInventoryPath = path.resolve(inventoryIn || path.join(config.outDir, '.patreon-dl', DEFAULT_INVENTORY_FILENAME));
         baseState = readInventoryBaseState(baseInventoryPath);
         outputPath = path.resolve(inventoryOut || path.join(config.outDir, '.patreon-dl', DEFAULT_DELTA_INVENTORY_FILENAME));
+        stateOutDir = config.outDir;
         output = openInventoryOutput(outputPath, false);
         await writeJSONL(output, {
           type: 'inventoryRun',
@@ -509,12 +536,14 @@ async function inventoryDeltaPosts(options: {
   finally {
     if (output) {
       const inventoryOutput = output;
-      await writeJSONL(inventoryOutput, {
+      const completedAt = new Date().toISOString();
+      const finalStopReason = abortController.signal.aborted && !hitLimit ? 'abort' : stopReason;
+      const summary = {
         type: 'inventorySummary',
         schemaVersion: 1,
         delta: true,
         startedAt,
-        completedAt: new Date().toISOString(),
+        completedAt,
         aborted: abortController.signal.aborted && !hitLimit,
         limited: hitLimit,
         limit: inventoryLimit || null,
@@ -524,11 +553,37 @@ async function inventoryDeltaPosts(options: {
         newPosts,
         updatedPosts,
         skippedExistingPosts,
-        stopReason: abortController.signal.aborted && !hitLimit ? 'abort' : stopReason
-      });
+        stopReason: finalStopReason
+      };
+      await writeJSONL(inventoryOutput, summary);
       await new Promise<void>((resolve) => inventoryOutput.end(resolve));
       if (outputPath) {
         commonLog(consoleLogger, 'info', null, `Inventory delta written to "${outputPath}"`);
+      }
+      if (outputPath && stateOutDir) {
+        const archiveOutDir = stateOutDir;
+        const archiveOutputPath = outputPath;
+        const archiveBaseInventoryPath = baseInventoryPath;
+        updateArchiveState(stateOutDir, (state) => {
+          state.inventory = {
+            ...state.inventory,
+            lastDelta: {
+              path: toArchiveStatePath(archiveOutDir, archiveOutputPath) || archiveOutputPath,
+              baseInventory: toArchiveStatePath(archiveOutDir, archiveBaseInventoryPath),
+              startedAt,
+              completedAt,
+              basePosts: baseState?.postKeys.size || 0,
+              deltaPosts,
+              newPosts,
+              updatedPosts,
+              skippedExistingPosts,
+              stopReason: finalStopReason,
+              aborted: summary.aborted,
+              limited: hitLimit,
+              limit: inventoryLimit || null
+            }
+          };
+        });
       }
     }
     process.off('SIGINT', abortHandler);
