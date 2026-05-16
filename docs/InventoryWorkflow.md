@@ -43,6 +43,15 @@ node bin/patreon-dl.js -C creator.local.conf --no-prompt ./downloads/creator/.pa
 
 The media filter selects posts that contain audio. Once a post is selected, the downloader still uses the config to decide which assets inside that post are downloaded.
 
+For video-like posts, prefer source-shape selectors over tags:
+
+```sh
+node bin/patreon-dl.js -C creator.local.conf --inventory-select --inventory-in ./downloads/creator/.patreon-dl/inventory-current.jsonl --select-media attached-video --target-out ./downloads/creator/.patreon-dl/attached-video-targets.txt
+node bin/patreon-dl.js -C creator.local.conf --inventory-select --inventory-in ./downloads/creator/.patreon-dl/inventory-current.jsonl --select-media embedded-video --target-out ./downloads/creator/.patreon-dl/embedded-video-targets.txt
+```
+
+`video` selects any video-bearing post; `hosted-video`, `embedded-video`, and `attached-video` narrow by how Patreon exposed the asset. This matters because Patreon-hosted MP4 files can appear as attachments rather than native post video.
+
 ## Verify Harvest
 
 Use the harvest report to compare targets against inventory, the SQLite database, local files, and status-cache errors:

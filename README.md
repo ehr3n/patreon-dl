@@ -131,7 +131,7 @@ $ patreon-dl [OPTION]... URL
 | <code><nobr>--inventory-in &lt;file&gt;</nobr></code> | | Path to read inventory JSONL. Defaults to `<out.dir>/.patreon-dl/inventory.jsonl`. |
 | <code><nobr>--target-in &lt;file&gt;</nobr></code> | | Path to read selected target URLs for `--inventory-report`. |
 | <code><nobr>--target-out &lt;file&gt;</nobr></code> | | Path to write selected target URLs. Defaults to `<out.dir>/.patreon-dl/targets.txt`. |
-| <code><nobr>--select-media &lt;types&gt;</nobr></code> | | Select posts with content media types, e.g. `audio` or `audio,attachment`. |
+| <code><nobr>--select-media &lt;types&gt;</nobr></code> | | Select posts with content media types, e.g. `audio`, `attached-video`, or `audio,attachment`. `video` matches hosted, embedded, and attached video; use `hosted-video`, `embedded-video`, or `attached-video` to narrow by source shape. |
 | <code><nobr>--select-tag &lt;tags&gt;</nobr></code> | | Select posts with one or more tag values or IDs. |
 | <code><nobr>--select-limit &lt;number&gt;</nobr></code> | | Limit selected posts, useful for pilot runs. |
 | `--configure-youtube` | | <p>Configure YouTube connection.</p>`patreon-dl` supports downloading embedded YouTube videos. If you have a YouTube Premium account, you can connect `patreon-dl` to it for downloading Premium-quality streams. You will also need to connect to an account if you get a "Login required" error message during download.|
@@ -147,6 +147,13 @@ $ patreon-dl -C creator.local.conf --inventory-report --inventory-in ./downloads
 $ patreon-dl -C creator.local.conf --inventory-select --select-media audio --target-out ./downloads/creator/.patreon-dl/audio-targets.txt
 $ patreon-dl -C creator.local.conf --inventory-report --target-in ./downloads/creator/.patreon-dl/audio-targets.txt
 $ patreon-dl -C creator.local.conf ./downloads/creator/.patreon-dl/audio-targets.txt
+```
+
+For video-like posts, select by media shape rather than tags:
+
+```
+$ patreon-dl -C creator.local.conf --inventory-select --select-media attached-video --target-out ./downloads/creator/.patreon-dl/attached-video-targets.txt
+$ patreon-dl -C creator.local.conf --inventory-select --select-media embedded-video --target-out ./downloads/creator/.patreon-dl/embedded-video-targets.txt
 ```
 
 ### URL

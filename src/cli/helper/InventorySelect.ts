@@ -10,7 +10,7 @@ export type InventorySelectResult = false | {
   hasError: boolean;
 };
 
-export type ContentMediaType = 'image' | 'video' | 'audio' | 'attachment';
+export type ContentMediaType = 'image' | 'video' | 'hosted-video' | 'embedded-video' | 'attached-video' | 'audio' | 'attachment';
 
 export type InventoryTag = {
   id?: string | null;
@@ -20,6 +20,8 @@ export type InventoryTag = {
 export type InventoryMedia = {
   source?: string | null;
   type?: string | null;
+  filename?: string | null;
+  mimeType?: string | null;
   hasDownloadURL?: boolean;
 };
 
@@ -36,7 +38,16 @@ export type InventoryPostRecord = {
   media?: InventoryMedia[];
 };
 
-export const CONTENT_MEDIA_TYPES: ContentMediaType[] = [ 'image', 'video', 'audio', 'attachment' ];
+export const CONTENT_MEDIA_TYPES: ContentMediaType[] = [ 'image', 'video', 'hosted-video', 'embedded-video', 'attached-video', 'audio', 'attachment' ];
+const DOWNLOADER_POST_MEDIA_TYPES: Record<ContentMediaType, Array<'image' | 'video' | 'audio' | 'attachment'>> = {
+  image: [ 'image' ],
+  video: [ 'video', 'attachment' ],
+  'hosted-video': [ 'video' ],
+  'embedded-video': [ 'video' ],
+  'attached-video': [ 'attachment' ],
+  audio: [ 'audio' ],
+  attachment: [ 'attachment' ]
+};
 const DEFAULT_INVENTORY_FILENAME = 'inventory.jsonl';
 const DEFAULT_TARGETS_FILENAME = 'targets.txt';
 
@@ -210,7 +221,7 @@ function getTargetIncludeLines(mediaTypes: ContentMediaType[]) {
   if (mediaTypes.length === 0) {
     return [];
   }
-  const mediaList = mediaTypes.join(',');
+  const mediaList = Array.from(new Set(mediaTypes.flatMap((type) => DOWNLOADER_POST_MEDIA_TYPES[type]))).join(',');
   return [
     `include.posts.with.media.type = ${mediaList}`,
     'include.content.media = 1'
@@ -223,27 +234,36 @@ function matchesMediaTypes(post: InventoryPostRecord, mediaTypes: ContentMediaTy
   }
   const selectedTypes = new Set(mediaTypes);
   return (post.media || []).some((media) => {
-    const type = getContentMediaType(media);
-    return !!type && selectedTypes.has(type) && media.hasDownloadURL !== false;
+    return getContentMediaTypes(media).some((type) => selectedTypes.has(type)) && media.hasDownloadURL !== false;
   });
 }
 
 export function getContentMediaType(media: InventoryMedia): ContentMediaType | null {
+  return getContentMediaTypes(media)[0] || null;
+}
+
+export function getContentMediaTypes(media: InventoryMedia): ContentMediaType[] {
   switch (media.source) {
     case 'audio':
-      return 'audio';
+      return [ 'audio' ];
     case 'video':
-      return 'video';
+      return [ 'video', 'hosted-video' ];
     case 'images':
-      return 'image';
+      return [ 'image' ];
     case 'attachments':
     case 'linkedAttachments':
-      return 'attachment';
+      return isVideoMedia(media) ? [ 'attachment', 'video', 'attached-video' ] : [ 'attachment' ];
     case 'embed':
-      return media.type === 'videoEmbed' ? 'video' : null;
+      return media.type === 'videoEmbed' ? [ 'video', 'embedded-video' ] : [];
     default:
-      return null;
+      return [];
   }
+}
+
+function isVideoMedia(media: InventoryMedia) {
+  return media.type === 'video' ||
+    !!media.mimeType?.toLowerCase().startsWith('video/') ||
+    !!media.filename?.toLowerCase().match(/\.(mp4|m4v|mov|webm|mkv|avi)$/u);
 }
 
 function matchesTags(post: InventoryPostRecord, tags: string[]) {
