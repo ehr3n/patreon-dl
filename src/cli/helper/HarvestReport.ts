@@ -5,7 +5,7 @@ import { getCLIOptions } from '../CLIOptions.js';
 import CommandLineParser from '../CommandLineParser.js';
 import {
   CONTENT_MEDIA_TYPES,
-  getContentMediaType,
+  getContentMediaTypes,
   readInventoryPosts,
   type ContentMediaType,
   type InventoryPostRecord
@@ -461,9 +461,10 @@ function getExpectedMediaCounts(posts: InventoryPostRecord[]) {
   const counts = new Map<ContentMediaType, number>();
   for (const post of posts) {
     for (const media of post.media || []) {
-      const mediaType = getContentMediaType(media);
-      if (mediaType && media.hasDownloadURL !== false) {
-        increment(counts, mediaType);
+      if (media.hasDownloadURL !== false) {
+        for (const mediaType of getContentMediaTypes(media)) {
+          increment(counts, mediaType);
+        }
       }
     }
   }

@@ -5,7 +5,7 @@ import CommandLineParser from '../CommandLineParser.js';
 import {
   CONTENT_MEDIA_TYPES,
   type ContentMediaType,
-  getContentMediaType,
+  getContentMediaTypes,
   type InventoryPostRecord
 } from './InventorySelect.js';
 
@@ -273,10 +273,11 @@ function getPostStats(posts: InventoryPostRecord[]) {
     const postMediaTypes = new Set<ContentMediaType>();
     for (const media of post.media || []) {
       increment(assetsBySource, media.source || 'unknown');
-      const contentMediaType = getContentMediaType(media);
-      if (contentMediaType && media.hasDownloadURL !== false) {
-        postMediaTypes.add(contentMediaType);
-        increment(assetsByMediaType, contentMediaType);
+      if (media.hasDownloadURL !== false) {
+        for (const contentMediaType of getContentMediaTypes(media)) {
+          postMediaTypes.add(contentMediaType);
+          increment(assetsByMediaType, contentMediaType);
+        }
       }
     }
     for (const mediaType of postMediaTypes) {
