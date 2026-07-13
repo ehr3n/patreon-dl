@@ -24,6 +24,7 @@ const COMMAND_LINE_ARGS = {
   noPrompt: 'no-prompt',
   dryRun: 'dry-run',
   force: 'force',
+  progressOut: 'progress-out',
   listTiers: 'list-tiers',
   listTiersByUserId: 'list-tiers-uid',
   listPosts: 'list-posts',
@@ -119,6 +120,12 @@ const OPT_DEFS = [
     name: COMMAND_LINE_ARGS.force,
     description: 'Force target reprocessing by bypassing status-cache skips. Existing files still follow file-exists settings.',
     type: Boolean
+  },
+  {
+    name: COMMAND_LINE_ARGS.progressOut,
+    description: 'Write sanitized harvest progress events as JSON Lines',
+    type: String,
+    typeLabel: '<file>'
   },
   {
     name: COMMAND_LINE_ARGS.listTiers,
@@ -362,6 +369,7 @@ export default class CommandLineParser {
       },
       noPrompt: __getValue(COMMAND_LINE_ARGS.noPrompt),
       dryRun: __getValue(COMMAND_LINE_ARGS.dryRun),
+      progressOut: __getValue(COMMAND_LINE_ARGS.progressOut),
       consoleLogger: {
         enabled: consoleLoggerEnabled,
         logLevel: consoleLoggerLevel,

@@ -18,6 +18,7 @@ export interface CLITargetURLEntry {
 export interface CLIOptions extends Omit<DownloaderOptions, 'logger'> {
   targetURLs: CLITargetURLEntry[];
   noPrompt: boolean;
+  progressOut?: string;
   consoleLogger: ConsoleLoggerOptions;
   fileLoggers?: Omit<FileLoggerOptions<FileLoggerType.Downloader>, 'init'>[];
 }
@@ -102,6 +103,7 @@ export function getCLIOptions(skipTargetURLs = false): CLIOptions | Omit<CLIOpti
     embedDownloaders: getEmbedDownloaderOptions(configFileOptions),
     maxVideoResolution: CLIOptionValidator.validateNumber(pickDefined(commandLineOptions.maxVideoResolution, configFileOptions?.maxVideoResolution)),
     noPrompt: CLIOptionValidator.validateBoolean(pickDefined(commandLineOptions.noPrompt, configFileOptions?.noPrompt)) || false,
+    progressOut: CLIOptionValidator.validateString(commandLineOptions.progressOut),
     dryRun: CLIOptionValidator.validateBoolean(pickDefined(commandLineOptions.dryRun, configFileOptions?.dryRun)) || false,
     consoleLogger,
     fileLoggers

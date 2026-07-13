@@ -119,6 +119,7 @@ $ patreon-dl [OPTION]... URL
 | `--no-prompt` | `-y` | Do not prompt for confirmation to proceed |
 | `--dry-run`   |      | Run without writing files to disk (except logs, if any). Intended for testing / debugging. |
 | `--force`     |      | Force target reprocessing by bypassing status-cache skips. Existing files still follow file-exists settings. |
+| <code><nobr>--progress-out &lt;file&gt;</nobr></code> | | Write sanitized harvest lifecycle events as JSON Lines for an external coordinator. Events contain post IDs/titles, safe filenames/media types, status, byte progress, and reason codes; they omit URLs, cookies, and local paths. |
 | <code><nobr>--list-tiers &lt;creator&gt;</nobr></code> | | <p>List tiers for the given creator(s). Separate multiple creators with a comma.</p>The purpose of this is to let you find out what tier IDs to set for `posts.in.tier` filtering option under `include` section of [configuration file](#configuration-file). |
 | <code><nobr>--list-tiers-uid &lt;user ID&gt;</nobr></code> | | Same as `--list-tiers`, but takes user ID instead of vanity. |
 | <code><nobr>--list-posts &lt;creator&gt;</nobr></code> | | <p>List posts by the given creator(s). Separate multiple creators with a comma.</p> |

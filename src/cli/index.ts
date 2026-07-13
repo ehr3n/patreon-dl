@@ -30,6 +30,7 @@ import { mergeInventory } from './helper/InventoryMerge.js';
 import { reportInventory } from './helper/InventoryReport.js';
 import { selectInventoryTargets } from './helper/InventorySelect.js';
 import { harvestReport } from './helper/HarvestReport.js';
+import HarvestProgressReporter from './helper/HarvestProgressReporter.js';
 
 const YT_CREDENTIALS_FILENAME = 'youtube-credentials.json';
 
@@ -111,9 +112,14 @@ export default class PatreonDownloaderCLI {
 
     const targetsWithError: string[] = [];
     const targetEndMessages: { url: string; message: string; }[] = [];
+    const progressReporter = options.progressOut
+      ? new HarvestProgressReporter(options.progressOut, options.targetURLs.map((target) => target.url))
+      : null;
+    progressReporter?.start();
     for (let i = 0; i < options.targetURLs.length; i++) {
-      const { hasError, aborted, endMessage, targetDidWork } = await this.#createAndStartDownloader(options.targetURLs, i, options);
+      const { hasError, aborted, endMessage, targetDidWork } = await this.#createAndStartDownloader(options.targetURLs, i, options, progressReporter);
       if (aborted) {
+        progressReporter?.end(true, true);
         return this.exit(1);
       }
       const targetURL = options.targetURLs[i].url;
@@ -121,7 +127,8 @@ export default class PatreonDownloaderCLI {
         targetsWithError.push(targetURL);
       }
       targetEndMessages[i] = { url: targetURL, message: endMessage };
-      if (await this.#delayBetweenTargets(options, i, targetDidWork)) {
+      if (await this.#delayBetweenTargets(options, i, targetDidWork, progressReporter)) {
+        progressReporter?.end(true, true);
         return this.exit(1);
       }
     }
@@ -140,11 +147,13 @@ export default class PatreonDownloaderCLI {
       });
     }
     if (targetsWithError.length > 0) {
+      progressReporter?.end(true);
       if (options.targetURLs.length > 0) {
         console.warn('There were errors processing the following URLs:', JSON.stringify(targetsWithError, null, 2));
       }
       return this.exit(1);
     }
+    progressReporter?.end(false);
     return this.exit(0);
   }
 
@@ -276,7 +285,7 @@ export default class PatreonDownloaderCLI {
     return true;
   }
 
-  async #delayBetweenTargets(options: CLIOptions, currentTargetIndex: number, targetDidWork: boolean) {
+  async #delayBetweenTargets(options: CLIOptions, currentTargetIndex: number, targetDidWork: boolean, progressReporter: HarvestProgressReporter | null) {
     const delayMs = options.request?.targetDelay || 0;
     if (delayMs <= 0 || currentTargetIndex >= options.targetURLs.length - 1) {
       return false;
@@ -294,6 +303,7 @@ export default class PatreonDownloaderCLI {
     };
 
     commonLog(consoleLogger, 'info', null, `Waiting ${delayMs / 1000} seconds before next target`);
+    progressReporter?.delay(currentTargetIndex, delayMs);
     process.on('SIGINT', abortHandler);
     try {
       await Sleeper.getInstance(delayMs, abortController.signal).start();
@@ -376,7 +386,7 @@ export default class PatreonDownloaderCLI {
     });
   }
 
-  async #createAndStartDownloader(targetURLs: CLITargetURLEntry[], index: number, options: CLIOptions) {
+  async #createAndStartDownloader(targetURLs: CLITargetURLEntry[], index: number, options: CLIOptions, progressReporter: HarvestProgressReporter | null) {
     const { url: targetURL } = targetURLs[index];
     const includeOpts = this.#getApplicableIncludeOptions(targetURLs[index].include, options.include);
 
@@ -397,15 +407,18 @@ export default class PatreonDownloaderCLI {
     }
     catch (error) {
       commonLog(logger, 'error', null, 'Failed to get downloader instance:', error);
+      progressReporter?.failTarget(index, 'downloader-init');
       return { hasError: true, endMessage: 'Downloader init error', targetDidWork: true };
     }
 
     if (!downloader) {
       commonLog(logger, 'error', null, 'Failed to get downloader instance (unknown reason)');
+      progressReporter?.failTarget(index, 'downloader-init');
       return { hasError: true, endMessage: 'Downloader init error', targetDidWork: true };
     }
 
     const downloaderName = downloader.name;
+    progressReporter?.attach(downloader, index);
     const __logBegin = () => {
       commonLog(logger, 'info', null, `*** BEGIN target URL: ${targetURL} ***`, EOL);
     };
