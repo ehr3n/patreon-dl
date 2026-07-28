@@ -8,6 +8,7 @@
   "scripts": {
     "build": "npm run build:core && npm run build:web",
     "build:core": "rimraf dist && npx tsc -p tsconfig.json",
+    "test": "npm run build:core && node --test test/*.test.mjs",
     "lint": "npx --node-options='--max-old-space-size=4096' eslint ./src",
     "lint:fix": "npx --node-options='--max-old-space-size=4096' eslint ./src --fix",
     "build:web": "vite build",

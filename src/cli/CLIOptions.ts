@@ -1,4 +1,5 @@
 import fs from 'fs';
+import { homedir } from 'os';
 import { type DownloaderIncludeOptions, type DownloaderOptions } from '../downloaders/DownloaderOptions.js';
 import { type DeepPartial, type RecursivePropsTo, pickDefined } from '../utils/Misc.js';
 import { type ConsoleLoggerOptions } from '../utils/logging/ConsoleLogger.js';
@@ -71,7 +72,7 @@ export function getCLIOptions(skipTargetURLs = false): CLIOptions | Omit<CLIOpti
   const proxy = getProxyOptions(configFileOptions);
 
   const options = {
-    cookie: CLIOptionValidator.validateString(pickDefined(commandLineOptions.cookie, configFileOptions?.cookie)),
+    cookie: resolveCookieOption(commandLineOptions, configFileOptions),
     useStatusCache: CLIOptionValidator.validateBoolean(pickDefined(commandLineOptions.useStatusCache, configFileOptions?.useStatusCache)),
     stopOn: CLIOptionValidator.validateString(pickDefined(commandLineOptions.stopOn, configFileOptions?.stopOn), 'never', 'postPreviouslyDownloaded', 'postPublishDateOutOfRange', 'previouslyDownloaded', 'publishDateOutOfRange'),
     pathToFFmpeg: CLIOptionValidator.validateString(pickDefined(commandLineOptions.pathToFFmpeg, configFileOptions?.pathToFFmpeg)),
@@ -117,6 +118,84 @@ export function getCLIOptions(skipTargetURLs = false): CLIOptions | Omit<CLIOpti
     targetURLs,
     ...options
   } satisfies CLIOptions;
+}
+
+function resolveCookieOption(
+  commandLineOptions: CommandLineParseResult,
+  configFileOptions?: ConfigFileParseResult | null
+) {
+  const commandLineCookie = CLIOptionValidator.validateString(commandLineOptions.cookie);
+  const commandLineCookieFile = CLIOptionValidator.validateString(commandLineOptions.cookieFile);
+  if (commandLineCookie && commandLineCookieFile) {
+    throw Error("Command-line options '--cookie' and '--cookie-file' cannot be used together");
+  }
+  if (commandLineCookie) {
+    return commandLineCookie;
+  }
+  if (commandLineCookieFile) {
+    return readCookieFile(commandLineCookieFile);
+  }
+
+  const configCookie = CLIOptionValidator.validateString(configFileOptions?.cookie);
+  const configCookieFile = CLIOptionValidator.validateString(configFileOptions?.cookieFile);
+  if (configCookie && configCookieFile) {
+    throw Error("Config file options '[downloader]->cookie' and '[downloader]->cookie.file' cannot be used together");
+  }
+  if (configCookie) {
+    return configCookie;
+  }
+  if (configCookieFile) {
+    return readCookieFile(configCookieFile, commandLineOptions.configFile?.value);
+  }
+  return undefined;
+}
+
+export function readCookieFile(value: string, configFile?: string) {
+  const expanded = expandHomePath(value);
+  const baseDir = configFile
+    ? path.dirname(path.resolve(expandHomePath(configFile)))
+    : process.cwd();
+  const file = path.isAbsolute(expanded) ? expanded : path.resolve(baseDir, expanded);
+  let stat: fs.Stats;
+  try {
+    stat = fs.lstatSync(file);
+  }
+  catch {
+    throw Error(`Cookie file does not exist or is not readable: ${file}`);
+  }
+  if (!stat.isFile()) {
+    throw Error(`Cookie file must be a regular file, not a directory or symbolic link: ${file}`);
+  }
+  if (process.platform !== 'win32') {
+    if (typeof process.getuid === 'function' && stat.uid !== process.getuid()) {
+      throw Error(`Cookie file must be owned by the current user: ${file}`);
+    }
+    if ((stat.mode & 0o077) !== 0) {
+      throw Error(`Cookie file must not be accessible by group or other users; use mode 600: ${file}`);
+    }
+  }
+  if (stat.size > 64 * 1024) {
+    throw Error(`Cookie file exceeds the 64 KiB safety limit: ${file}`);
+  }
+  const cookie = fs.readFileSync(file, 'utf-8').replace(/^\uFEFF/u, '').trim();
+  if (!cookie) {
+    throw Error(`Cookie file is empty: ${file}`);
+  }
+  if (cookie.includes('\n') || cookie.includes('\r')) {
+    throw Error(`Cookie file must contain exactly one line: ${file}`);
+  }
+  return cookie;
+}
+
+function expandHomePath(value: string) {
+  const trimmed = value.trim();
+  if (trimmed === '~') {
+    return homedir();
+  }
+  if (/^~[\\/]/u.test(trimmed)) {
+    return path.join(homedir(), trimmed.slice(2));
+  }
+  return trimmed;
 }
 
 export function getCLILoggerOptions(commandLineOptions?: CommandLineParseResult, configFileOptions?: ReturnType<typeof ConfigFileParser['parse']> | null) {

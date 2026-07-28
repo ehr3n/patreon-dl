@@ -5,6 +5,7 @@ import { type DeepPartial, type RecursivePropsTo } from '../utils/Misc.js';
 const CONFIG_FILE_PROPS = {
   targetURL: 'downloader:target.url',
   cookie: 'downloader:cookie',
+  cookieFile: 'downloader:cookie.file',
   useStatusCache: 'downloader:use.status.cache',
   stopOn: 'downloader:stop.on',
   noPrompt: 'downloader:no.prompt',
@@ -92,6 +93,7 @@ const CONFIG_FILE_PROPS = {
 
 export type ConfigFileParseResult = RecursivePropsTo<DeepPartial<Omit<CLIOptions, 'targetURLs'>>, CLIOptionParserEntry> & {
   targetURLs?: CLIOptionParserEntry;
+  cookieFile?: CLIOptionParserEntry;
 };
 
 export default class ConfigFileParser {
@@ -108,6 +110,7 @@ export default class ConfigFileParser {
     return {
       targetURLs: __getValue(CONFIG_FILE_PROPS.targetURL),
       cookie: __getValue(CONFIG_FILE_PROPS.cookie),
+      cookieFile: __getValue(CONFIG_FILE_PROPS.cookieFile),
       useStatusCache: __getValue(CONFIG_FILE_PROPS.useStatusCache),
       stopOn: __getValue(CONFIG_FILE_PROPS.stopOn),
       pathToFFmpeg: __getValue(CONFIG_FILE_PROPS.pathToFFmpeg),

@@ -8,6 +8,7 @@ import { getPackageInfo } from '../utils/PackageInfo.js';
 export interface CommandLineParseResult extends RecursivePropsTo<DeepPartial<Omit<CLIOptions, 'targetURLs'>>, CLIOptionParserEntry> {
   targetURLs?: CLIOptionParserEntry;
   configFile?: CLIOptionParserEntry;
+  cookieFile?: CLIOptionParserEntry;
   debugAPI?: CLIOptionParserEntry;
 }
 
@@ -17,6 +18,7 @@ const COMMAND_LINE_ARGS = {
   configFile: 'config-file',
   targetURL: 'target-url',
   cookie: 'cookie',
+  cookieFile: 'cookie-file',
   ffmpeg: 'ffmpeg',
   deno: 'deno',
   outDir: 'out-dir',
@@ -76,6 +78,12 @@ const OPT_DEFS = [
     alias: 'c',
     type: String,
     typeLabel: '<string>'
+  },
+  {
+    name: COMMAND_LINE_ARGS.cookieFile,
+    description: 'Read the Patreon cookie from a private local file',
+    type: String,
+    typeLabel: '<file>'
   },
   {
     name: COMMAND_LINE_ARGS.ffmpeg,
@@ -332,6 +340,7 @@ export default class CommandLineParser {
       targetURLs: __getValue(COMMAND_LINE_ARGS.targetURL),
       debugAPI: __getValue(COMMAND_LINE_ARGS.debugAPI),
       cookie: __getValue(COMMAND_LINE_ARGS.cookie),
+      cookieFile: __getValue(COMMAND_LINE_ARGS.cookieFile),
       useStatusCache: __getForceUseStatusCacheValue(__getValue(COMMAND_LINE_ARGS.force)),
       pathToFFmpeg: __getValue(COMMAND_LINE_ARGS.ffmpeg),
       pathToDeno: __getValue(COMMAND_LINE_ARGS.deno),

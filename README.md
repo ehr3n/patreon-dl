@@ -112,6 +112,7 @@ $ patreon-dl [OPTION]... URL
 | `--help`  | `-h`  | Display usage guide |
 | <code><nobr>--config-file &lt;path&gt;</nobr></code> | `-C` | Load [configuration file](#configuration-file) at `<path>` for setting full options |
 | `--cookie <string>` | `-c` | Cookie for accessing patron-only content; [how to obtain cookie](https://github.com/patrickkfkan/patreon-dl/wiki/How-to-obtain-Cookie). |
+| <code><nobr>--cookie-file &lt;path&gt;</nobr></code> | | Read the Patreon cookie from a private local file. On macOS/Linux the file must be owned by the current user and inaccessible to group/other users. |
 | `--ffmpeg <path>` | `-f` | Path to FFmpeg executable |
 | `--deno <path>` | `-d` | Path to Deno executable |
 | `--out-dir <path>` |`-o` | Directory to save content |
@@ -140,6 +141,8 @@ $ patreon-dl [OPTION]... URL
 ### Inventory workflow
 
 Use inventory mode to catalog posts without downloading media, then select post URLs from that catalog for a normal download run. Selection filters choose which posts to download; selected posts are downloaded with their full content media unless your config overrides them.
+
+For multiple creators accessed by the same Patreon account, store the cookie once in a private file and set `cookie.file` in each creator config. Relative paths are resolved from the creator config's directory. The credential file must contain one non-empty line; inline `cookie` and `cookie.file` are mutually exclusive.
 
 ```
 $ patreon-dl -C creator.local.conf --inventory

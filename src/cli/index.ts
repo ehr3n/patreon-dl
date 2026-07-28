@@ -17,7 +17,6 @@ import YouTubeConfigurator from './helper/YouTubeConfigurator.js';
 import { type DownloaderIncludeOptions } from '../downloaders/DownloaderOptions.js';
 import ObjectHelper from '../utils/ObjectHelper.js';
 import copy from 'fast-copy';
-import cliTruncate from 'cli-truncate';
 import type deepFreeze from 'deep-freeze';
 import { isDenoInstalled, type DeepPartial } from '../utils/Misc.js';
 import Sleeper from '../utils/Sleeper.js';
@@ -355,7 +354,7 @@ export default class PatreonDownloaderCLI {
       delete displayConfig.include.postsPublished.before;
     }
     if (config.cookie) {
-      displayConfig.cookie = cliTruncate(displayConfig.cookie, 20, { position: 'middle', space: true });
+      displayConfig.cookie = '<redacted>';
     }
     if (config.include?.mediaByFilename) {
       for (const [k, v] of Object.entries(config.include.mediaByFilename)) {

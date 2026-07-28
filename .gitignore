@@ -1,6 +1,7 @@
 dist/
 node_modules/
-test/
+test/*
+!test/credential-file.test.mjs
 .vscode/
 .DS_Store
 
