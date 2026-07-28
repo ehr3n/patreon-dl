@@ -327,10 +327,21 @@ function createHarvestReport(args: {
 }): HarvestReportData {
   const uniqueTargetURLs = Array.from(new Set(args.targetURLs));
   const inventoryByURL = new Map(args.inventoryPosts.filter((post) => !!post.url).map((post) => [ post.url as string, post ]));
+  const inventoryByPostID = new Map<string, InventoryPostRecord>();
+  for (const post of args.inventoryPosts) {
+    const postID = post.id || getPostIDFromURL(post.url);
+    if (postID) {
+      inventoryByPostID.set(postID, post);
+    }
+  }
+  const findInventoryPost = (url: string) => {
+    const postID = getPostIDFromURL(url);
+    return inventoryByURL.get(url) || (postID ? inventoryByPostID.get(postID) : undefined);
+  };
   const targetPosts = uniqueTargetURLs
-    .map((url) => ({ url, post: inventoryByURL.get(url) || null }))
+    .map((url) => ({ url, post: findInventoryPost(url) || null }))
     .filter((target): target is { url: string; post: InventoryPostRecord; } => !!target.post);
-  const missingInventoryURLs = uniqueTargetURLs.filter((url) => !inventoryByURL.has(url));
+  const missingInventoryURLs = uniqueTargetURLs.filter((url) => !findInventoryPost(url));
 
   const downloadedTargets: InventoryPostRecord[] = [];
   const failedTargets: InventoryPostRecord[] = [];
@@ -492,8 +503,13 @@ function getPostIDFromURL(url?: string | null) {
   if (!url) {
     return null;
   }
-  const match = /-(\d+)(?:[/?#]|$)/.exec(url);
-  return match?.[1] || null;
+  try {
+    const match = /\/posts\/(?:[^/]*-)?(\d+)\/?$/u.exec(new URL(url).pathname);
+    return match?.[1] || null;
+  }
+  catch {
+    return null;
+  }
 }
 
 function printHeading(title: string) {

@@ -56,6 +56,8 @@ node bin/patreon-dl.js -C creator.local.conf --inventory-select --inventory-in .
 
 Use the harvest report to compare targets against inventory, the SQLite database, local files, and status-cache errors:
 
+Target URLs are matched to inventory records by Patreon post ID as well as exact URL, so stable `https://www.patreon.com/posts/<id>` targets verify correctly against creator-scoped or slugged inventory URLs.
+
 ```sh
 node bin/patreon-dl.js -C creator.local.conf --harvest-report --inventory-in ./downloads/creator/.patreon-dl/inventory-current.jsonl --target-in ./downloads/creator/.patreon-dl/audio-targets.txt
 ```
