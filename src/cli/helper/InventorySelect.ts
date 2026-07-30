@@ -18,6 +18,7 @@ export type InventoryTag = {
 };
 
 export type InventoryMedia = {
+  id?: string | null;
   source?: string | null;
   type?: string | null;
   filename?: string | null;
@@ -45,7 +46,7 @@ const DOWNLOADER_POST_MEDIA_TYPES: Record<ContentMediaType, Array<'image' | 'vid
   'hosted-video': [ 'video' ],
   'embedded-video': [ 'video' ],
   'attached-video': [ 'attachment' ],
-  audio: [ 'audio' ],
+  audio: [ 'audio', 'attachment' ],
   attachment: [ 'attachment' ]
 };
 const DEFAULT_INVENTORY_FILENAME = 'inventory.jsonl';
@@ -251,13 +252,27 @@ export function getContentMediaTypes(media: InventoryMedia): ContentMediaType[] 
     case 'images':
       return [ 'image' ];
     case 'attachments':
-    case 'linkedAttachments':
-      return isVideoMedia(media) ? [ 'attachment', 'video', 'attached-video' ] : [ 'attachment' ];
+    case 'linkedAttachments': {
+      const types: ContentMediaType[] = [ 'attachment' ];
+      if (isAudioMedia(media)) {
+        types.push('audio');
+      }
+      if (isVideoMedia(media)) {
+        types.push('video', 'attached-video');
+      }
+      return types;
+    }
     case 'embed':
       return media.type === 'videoEmbed' ? [ 'video', 'embedded-video' ] : [];
     default:
       return [];
   }
+}
+
+function isAudioMedia(media: InventoryMedia) {
+  return media.type === 'audio' ||
+    !!media.mimeType?.toLowerCase().startsWith('audio/') ||
+    !!media.filename?.toLowerCase().match(/\.(aac|flac|m4a|mp3|ogg|opus|wav)$/u);
 }
 
 function isVideoMedia(media: InventoryMedia) {

@@ -8,6 +8,7 @@ import {
   getContentMediaTypes,
   readInventoryPosts,
   type ContentMediaType,
+  type InventoryMedia,
   type InventoryPostRecord
 } from './InventorySelect.js';
 import { toArchiveStatePath, updateArchiveState, writeJSONAtomic } from './ArchiveState.js';
@@ -369,9 +370,17 @@ function createHarvestReport(args: {
     if (!postID) {
       continue;
     }
+    const inventoryMediaByID = new Map<string, InventoryMedia>(
+      (post.media || [])
+        .filter((media): media is InventoryMedia & { id: string; } => typeof media.id === 'string')
+        .map((media) => [ media.id, media ])
+    );
     for (const media of args.dbState.mediaByPostID.get(postID) || []) {
       selectedDBMedia++;
-      increment(downloadedMediaCounts, media.media_type || 'unknown');
+      const inventoryMediaTypes = getContentMediaTypes(inventoryMediaByID.get(media.media_id) || {});
+      for (const mediaType of inventoryMediaTypes.length > 0 ? inventoryMediaTypes : [ media.media_type || 'unknown' ]) {
+        increment(downloadedMediaCounts, mediaType);
+      }
       if (!media.download_path) {
         continue;
       }
